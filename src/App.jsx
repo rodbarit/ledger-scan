@@ -35,8 +35,8 @@ function buildPageRef(bizCode, pageNumber) {
 function buildFilename(bizCode, ext) {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
-  return `${(bizCode || "UNKNOWN").trim()}${date}${time}.${ext}`;
+  const time = now.toTimeString().slice(0, 5).replace(":", "");
+  return `${(bizCode || "UNKNOWN").trim()}-${date}-${time}.${ext}`;
 }
 
 function toCSV(bizCode, rows) {
