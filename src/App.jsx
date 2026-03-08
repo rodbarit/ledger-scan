@@ -45,7 +45,7 @@ function toCSV(bizCode, rows) {
     ...rows.map((r, i) => {
       const pageNum = Math.ceil((i + 1) / 2);
       const pageRef = buildPageRef(bizCode, pageNum);
-      const refCode = buildReferenceCode(bizCode, r.data);
+      const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
       return [
         ...ALL_KEYS.map(k => `"${(r.data[k] || "").replace(/"/g, '""')}"`),
         `"${refCode}"`,
@@ -144,7 +144,7 @@ async function generatePDF(bizCode, receipts, filename) {
     for (let i = 0; i < group.length; i++) {
       const r = group[i];
       const rowY = tableY + colHeaderH + i * footerRowH;
-      const refCode  = buildReferenceCode(bizCode, r.data);
+      const refCode  = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
       const supplier = r.data.supplierName || r.data.invoiceReceipt || "—";
       const category = r.data.expenseType || "—";
       const total    = r.data.totalExpense || "—";
@@ -601,6 +601,20 @@ function Dashboard() {
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
                           {FIELDS.filter(f => f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />)}
+                          {/* Reference Code — auto-built but editable */}
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                              Reference Code
+                              <span style={{ fontSize: 9, background: "#dbeafe", color: "#2a5298", padding: "1px 6px", borderRadius: 3, fontWeight: 600, letterSpacing: "0.05em" }}>AUTO</span>
+                            </div>
+                            <input
+                              value={r.data.referenceCode || buildReferenceCode(bizCode, r.data)}
+                              onChange={e => updateField(r.id, "referenceCode", e.target.value)}
+                              style={{ width: "100%", padding: "8px 12px", fontSize: 13, borderRadius: 6, border: "1px solid #e5e2de", outline: "none", background: "#fafafa", fontFamily: "inherit" }}
+                              onFocus={e => { if (!r.data.referenceCode) updateField(r.id, "referenceCode", buildReferenceCode(bizCode, r.data)); e.target.style.borderColor = "#2a5298"; }}
+                              onBlur={e => e.target.style.borderColor = "#e5e2de"}
+                            />
+                          </div>
                         </div>
                       </div>
                       <div>
@@ -609,16 +623,6 @@ function Dashboard() {
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
                           {FIELDS.filter(f => !f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#b45309" />)}
-                          {/* Read-only Reference Code */}
-                          <div>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                              Reference Code
-                              <span style={{ fontSize: 9, background: "#f3f4f6", color: "#9ca3af", padding: "1px 6px", borderRadius: 3, fontWeight: 600, letterSpacing: "0.05em" }}>AUTO</span>
-                            </div>
-                            <div style={{ padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, color: "#374151", fontFamily: "monospace", letterSpacing: "0.03em" }}>
-                              {buildReferenceCode(bizCode, r.data) || <span style={{ color: "#d1d5db" }}>—</span>}
-                            </div>
-                          </div>
                         </div>
                       </div>
                     </>
