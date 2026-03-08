@@ -11,10 +11,28 @@ const FIELDS = [
   { key: "totalExpense",    label: "Total Expense",      ai: true  },
   { key: "vatablePurchase", label: "VATable Purchase",   ai: true  },
   { key: "inputVAT",        label: "Input VAT",          ai: true  },
-  { key: "referenceCode",   label: "Reference Code",     ai: true  },  // auto: <OR>-<YYYYMMDD>
-  { key: "businessCode",    label: "Business Code",      ai: false },
+  { key: "businessCode",    label: "Business Code",      ai: false }, // manual — used to build ref code
   { key: "supplierCode",    label: "Supplier Code",      ai: false },
+  { key: "referenceCode",   label: "Reference Code",     ai: false }, // auto-built: <BusinessCode>-<OR>-<YYYYMMDD>
 ];
+
+// Auto-generate reference code from businessCode + invoiceReceipt + accountDate
+function buildReferenceCode(data) {
+  const biz = (data.businessCode || "").trim();
+  const or  = (data.invoiceReceipt || "").trim();
+  const dt  = (data.accountDate || "").replace(/-/g, "").trim();
+  if (!or && !dt) return data.referenceCode || "";
+  const parts = [biz, or, dt].filter(Boolean);
+  return parts.join("-");
+}
+
+// Build PDF page reference: <BusinessCode>-<PageNumber>
+function buildPageRef(businessCode, pageNumber) {
+  const biz = (businessCode || "").trim();
+  if (!pageNumber) return "";
+  return biz ? `${biz}-${pageNumber}` : `${pageNumber}`;
+}
+
 const ALL_KEYS = FIELDS.map(f => f.key);
 const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 
@@ -34,10 +52,22 @@ async function extractReceiptData(base64, mediaType, token) {
 }
 
 function toCSV(rows) {
-  const header = FIELDS.map(f => f.label);
-  const lines = [header.join(","), ...rows.map(r =>
-    ALL_KEYS.map(k => `"${(r[k] || "").replace(/"/g, '""')}"`).join(",")
-  )];
+  // Assign page numbers: 2 receipts per page
+  const header = [...FIELDS.map(f => f.label), "PDF Page"];
+  const lines = [
+    header.join(","),
+    ...rows.map((r, i) => {
+      const pageNum = Math.ceil((i + 1) / 2);
+      const pageRef = buildPageRef(r.data.businessCode, pageNum);
+      return [
+        ...ALL_KEYS.map(k => {
+          const val = k === "referenceCode" ? buildReferenceCode(r.data) : (r.data[k] || "");
+          return `"${val.replace(/"/g, '""')}"`;
+        }),
+        `"${pageRef}"`
+      ].join(",");
+    })
+  ];
   return lines.join("\n");
 }
 
@@ -53,68 +83,92 @@ async function generatePDF(receipts) {
   }
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageW = 210, pageH = 297, margin = 8, footerH = 22, headerH = 14;
-  const cols = 2, rows = 2;
-  const gapX = 5, gapY = 5;
-  const cellW = (pageW - margin * 2 - gapX) / cols;
-  const cellH = (pageH - margin * 2 - headerH - 8 - gapY) / rows;
+  const pageW = 210, pageH = 297, margin = 10, gap = 4;
+  const cellW = (pageW - margin * 2 - gap) / 2;
+  const footerRowH = 7, colHeaderH = 8;
   const pages = [];
-  for (let i = 0; i < receipts.length; i += 4) pages.push(receipts.slice(i, i + 4));
+  for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
+
+  // Get business code from first receipt with one
+  const bizCode = receipts.find(r => r.data?.businessCode)?.data?.businessCode?.trim() || "";
+
+  const c1 = 60, c2 = 38, c3 = 50, c4 = pageW - margin * 2 - c1 - c2 - c3;
+  const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
 
   for (let p = 0; p < pages.length; p++) {
     if (p > 0) pdf.addPage();
     const group = pages[p];
-    pdf.setFillColor(26, 26, 46);
-    pdf.rect(margin, margin, pageW - margin * 2, headerH, "F");
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(11); pdf.setFont("helvetica", "bold");
-    pdf.text("LedgerScan — Receipt Archive", margin + 4, margin + 9);
-    pdf.setFontSize(8); pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(160, 180, 220);
-    const dateStr = new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
-    pdf.text(`Page ${p + 1} of ${pages.length}  ·  ${dateStr}`, pageW - margin - 4, margin + 9, { align: "right" });
 
+    // ── Header: Business Code + page number only ──
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(10); pdf.setTextColor(0, 0, 0);
+    pdf.text(bizCode || "—", margin, margin + 5);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(8);
+    pdf.text(`Page ${p + 1} of ${pages.length}`, pageW - margin, margin + 5, { align: "right" });
+    pdf.setDrawColor(0); pdf.setLineWidth(0.3);
+    pdf.line(margin, margin + 8, pageW - margin, margin + 8);
+
+    // ── Layout ──
+    const tableH = colHeaderH + group.length * footerRowH;
+    const imgAreaY = margin + 12;
+    const imgAreaH = pageH - imgAreaY - tableH - margin - 8;
+
+    // ── Receipt images ──
     for (let i = 0; i < group.length; i++) {
       const r = group[i];
-      const col = i % cols, row = Math.floor(i / cols);
-      const x = margin + col * (cellW + gapX);
-      const y = margin + headerH + 4 + row * (cellH + gapY);
-      pdf.setDrawColor(200, 200, 200); pdf.setLineWidth(0.2);
-      pdf.rect(x, y, cellW, cellH);
+      const x = margin + i * (cellW + gap);
+      pdf.setDrawColor(0); pdf.setLineWidth(0.2);
+      pdf.rect(x, imgAreaY, cellW, imgAreaH);
       if (r.preview) {
         try {
           const imgData = await getImageDataURL(r.preview, r.file?.type || "image/jpeg");
           const imgFormat = (r.file?.type || "").includes("png") ? "PNG" : "JPEG";
-          pdf.addImage(imgData, imgFormat, x + 0.5, y + 0.5, cellW - 1, cellH - footerH - 1, "", "FAST");
+          pdf.addImage(imgData, imgFormat, x + 0.5, imgAreaY + 0.5, cellW - 1, imgAreaH - 1, "", "FAST");
         } catch {}
       }
-      // Footer bar
-      const fy = y + cellH - footerH;
-      pdf.setFillColor(26, 26, 46);
-      pdf.rect(x, fy, cellW, footerH, "F");
-
-      // 4 equal columns in footer
-      const colW4 = cellW / 4;
-      const pad = 2;
-
-      // Labels
-      pdf.setFontSize(6); pdf.setFont("helvetica", "bold"); pdf.setTextColor(120, 150, 200);
-      pdf.text("REF CODE",  x + pad,                fy + 5);
-      pdf.text("SUPPLIER",  x + colW4 + pad,         fy + 5);
-      pdf.text("CATEGORY",  x + colW4 * 2 + pad,     fy + 5);
-      pdf.text("TOTAL",     x + colW4 * 3 + pad,     fy + 5);
-
-      // Values — longer truncation to fit more text
-      pdf.setFont("helvetica", "normal"); pdf.setTextColor(255, 255, 255); pdf.setFontSize(7.5);
-      const maxChars = Math.floor(colW4 / 1.8); // dynamic based on column width
-      const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
-
-      pdf.text(tr(r.data.referenceCode,                         maxChars), x + pad,            fy + 13);
-      pdf.text(tr(r.data.supplierCode || r.data.invoiceReceipt, maxChars), x + colW4 + pad,    fy + 13);
-      pdf.text(tr(r.data.expenseType,                           maxChars), x + colW4*2 + pad,  fy + 13);
-      pdf.text(tr(r.data.totalExpense,                          maxChars), x + colW4*3 + pad,  fy + 13);
     }
-    pdf.setFontSize(7); pdf.setTextColor(180, 180, 180); pdf.setFont("helvetica", "normal");
+
+    // ── Footer table ──
+    const tableY = pageH - margin - tableH - 6;
+    pdf.setDrawColor(0); pdf.setLineWidth(0.3);
+    pdf.line(margin, tableY - 1, pageW - margin, tableY - 1);
+
+    // Column headers
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(0, 0, 0);
+    let hx = margin;
+    pdf.text("REFERENCE CODE", hx, tableY + 5); hx += c1;
+    pdf.text("SUPPLIER",       hx, tableY + 5); hx += c2;
+    pdf.text("CATEGORY",       hx, tableY + 5); hx += c3;
+    pdf.text("TOTAL",          hx, tableY + 5);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, tableY + colHeaderH - 1, pageW - margin, tableY + colHeaderH - 1);
+
+    // Data rows
+    for (let i = 0; i < group.length; i++) {
+      const r = group[i];
+      const rowY = tableY + colHeaderH + i * footerRowH;
+      const refCode  = buildReferenceCode(r.data);
+      const supplier = r.data.supplierCode || r.data.invoiceReceipt || "—";
+      const category = r.data.expenseType || "—";
+      const total    = r.data.totalExpense || "—";
+
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0, 0, 0);
+      let rx = margin;
+      pdf.text(tr(refCode,  32), rx, rowY + 4.5); rx += c1;
+      pdf.text(tr(supplier, 20), rx, rowY + 4.5); rx += c2;
+      pdf.text(tr(category, 25), rx, rowY + 4.5); rx += c3;
+      pdf.text(tr(total,    18), rx, rowY + 4.5);
+
+      if (i < group.length - 1) {
+        pdf.setLineWidth(0.1); pdf.setDrawColor(180, 180, 180);
+        pdf.line(margin, rowY + footerRowH, pageW - margin, rowY + footerRowH);
+      }
+    }
+
+    pdf.setLineWidth(0.3); pdf.setDrawColor(0);
+    pdf.line(margin, tableY + tableH - 1, pageW - margin, tableY + tableH - 1);
+
+    // Page footer
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(120, 120, 120);
     pdf.text("Confidential — For accounting purposes only", pageW / 2, pageH - 4, { align: "center" });
   }
   pdf.save(`receipts-${new Date().toISOString().slice(0, 10)}.pdf`);
