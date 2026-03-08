@@ -7,30 +7,56 @@ import {
 const FIELDS = [
   { key: "accountDate",     label: "Account Date",      ai: true  },
   { key: "invoiceReceipt",  label: "Invoice / Receipt",  ai: true  },
+  { key: "supplierName",    label: "Supplier Name",      ai: true  }, // issuer of the receipt
   { key: "expenseType",     label: "Expense Type",       ai: true  },
   { key: "totalExpense",    label: "Total Expense",      ai: true  },
   { key: "vatablePurchase", label: "VATable Purchase",   ai: true  },
   { key: "inputVAT",        label: "Input VAT",          ai: true  },
-  { key: "businessCode",    label: "Business Code",      ai: false }, // manual — used to build ref code
   { key: "supplierCode",    label: "Supplier Code",      ai: false },
-  { key: "referenceCode",   label: "Reference Code",     ai: false }, // auto-built: <BusinessCode>-<OR>-<YYYYMMDD>
+  { key: "referenceCode",   label: "Reference Code",     ai: false }, // auto-built
 ];
 
 // Auto-generate reference code from businessCode + invoiceReceipt + accountDate
-function buildReferenceCode(data) {
-  const biz = (data.businessCode || "").trim();
+function buildReferenceCode(bizCode, data) {
+  const biz = (bizCode || "").trim();
   const or  = (data.invoiceReceipt || "").trim();
   const dt  = (data.accountDate || "").replace(/-/g, "").trim();
-  if (!or && !dt) return data.referenceCode || "";
   const parts = [biz, or, dt].filter(Boolean);
   return parts.join("-");
 }
 
 // Build PDF page reference: <BusinessCode>-<PageNumber>
-function buildPageRef(businessCode, pageNumber) {
-  const biz = (businessCode || "").trim();
-  if (!pageNumber) return "";
+function buildPageRef(bizCode, pageNumber) {
+  const biz = (bizCode || "").trim();
   return biz ? `${biz}-${pageNumber}` : `${pageNumber}`;
+}
+
+// Build filename: <BusinessCode><YYYYMMDD><HHmmss>
+function buildFilename(bizCode, ext) {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
+  return `${(bizCode || "UNKNOWN").trim()}${date}${time}.${ext}`;
+}
+
+function toCSV(bizCode, rows) {
+  const header = [...FIELDS.map(f => f.label), "Business Code", "PDF Page"];
+  const lines = [
+    header.join(","),
+    ...rows.map((r, i) => {
+      const pageNum = Math.ceil((i + 1) / 2);
+      const pageRef = buildPageRef(bizCode, pageNum);
+      return [
+        ...ALL_KEYS.map(k => {
+          const val = k === "referenceCode" ? buildReferenceCode(bizCode, r.data) : (r.data[k] || "");
+          return `"${val.replace(/"/g, '""')}"`;
+        }),
+        `"${bizCode}"`,
+        `"${pageRef}"`
+      ].join(",");
+    })
+  ];
+  return lines.join("\n");
 }
 
 const ALL_KEYS = FIELDS.map(f => f.key);
@@ -40,10 +66,7 @@ const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 async function extractReceiptData(base64, mediaType, token) {
   const response = await fetch("/api/extract", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
-    },
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
     body: JSON.stringify({ base64, mediaType })
   });
   const json = await response.json();
@@ -51,47 +74,7 @@ async function extractReceiptData(base64, mediaType, token) {
   return json.data;
 }
 
-// Build filename: <BusinessCode><YYYYMMDD><HHmmss>
-function buildFilename(bizCode, ext) {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
-  const prefix = (bizCode || "UNKNOWN").trim();
-  return `${prefix}${date}${time}.${ext}`;
-}
-
-// Group receipts by business code
-function groupByBizCode(receipts) {
-  const groups = {};
-  for (const r of receipts) {
-    const key = (r.data.businessCode || "").trim() || "UNKNOWN";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(r);
-  }
-  return groups;
-}
-
-function toCSV(rows) {
-  // Assign page numbers: 2 receipts per page (within this group)
-  const header = [...FIELDS.map(f => f.label), "PDF Page"];
-  const lines = [
-    header.join(","),
-    ...rows.map((r, i) => {
-      const pageNum = Math.ceil((i + 1) / 2);
-      const pageRef = buildPageRef(r.data.businessCode, pageNum);
-      return [
-        ...ALL_KEYS.map(k => {
-          const val = k === "referenceCode" ? buildReferenceCode(r.data) : (r.data[k] || "");
-          return `"${val.replace(/"/g, '""')}"`;
-        }),
-        `"${pageRef}"`
-      ].join(",");
-    })
-  ];
-  return lines.join("\n");
-}
-
-async function generatePDF(receipts, filename) {
+async function generatePDF(bizCode, receipts, filename) {
   if (!window.jspdf) {
     await new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -108,9 +91,6 @@ async function generatePDF(receipts, filename) {
   const footerRowH = 7, colHeaderH = 8;
   const pages = [];
   for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
-
-  // Get business code from first receipt with one
-  const bizCode = receipts.find(r => r.data?.businessCode)?.data?.businessCode?.trim() || "";
 
   const c1 = 60, c2 = 38, c3 = 50, c4 = pageW - margin * 2 - c1 - c2 - c3;
   const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
@@ -166,8 +146,8 @@ async function generatePDF(receipts, filename) {
     for (let i = 0; i < group.length; i++) {
       const r = group[i];
       const rowY = tableY + colHeaderH + i * footerRowH;
-      const refCode  = buildReferenceCode(r.data);
-      const supplier = r.data.supplierCode || r.data.invoiceReceipt || "—";
+      const refCode  = buildReferenceCode(bizCode, r.data);
+      const supplier = r.data.supplierName || r.data.invoiceReceipt || "—";
       const category = r.data.expenseType || "—";
       const total    = r.data.totalExpense || "—";
 
@@ -340,65 +320,89 @@ function UserMenu() {
   );
 }
 
-// ── Main app (only shown when signed in) ──────────────────────────────────
-function BizCodeModal({ missingCount, onConfirm, onCancel }) {
+// ── Business Code entry screen ─────────────────────────────────────────────
+function BizCodeScreen({ onConfirm }) {
+  const { user } = useUser();
+  const { signOut } = useClerk();
   const [value, setValue] = useState("");
+
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
+      minHeight: "100vh", background: "#f4f3f0",
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Lato', sans-serif"
     }}>
-      <div style={{
-        background: "#fff", borderRadius: 10, padding: 32, width: 360,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)", fontFamily: "'Lato', sans-serif"
-      }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>
-          Business Code Required
+      <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+      <div style={{ width: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
+          <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Receipt Processing v2.0</div>
         </div>
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
-          {missingCount} receipt{missingCount > 1 ? "s are" : " is"} missing a Business Code.
-          Enter one to apply to all of them before downloading.
+
+        <div style={{ background: "#fff", borderRadius: 12, padding: 36, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid #e5e2de" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a2e", marginBottom: 6 }}>Enter Business Code</div>
+          <div style={{ fontSize: 13, color: "#888", marginBottom: 24, lineHeight: 1.5 }}>
+            All receipts in this session will be filed under this business code.
+          </div>
+          <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#666", display: "block", marginBottom: 8 }}>
+            Business Code <span style={{ color: "#c0392b" }}>*</span>
+          </label>
+          <input
+            autoFocus
+            value={value}
+            onChange={e => setValue(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === "Enter" && value.trim() && onConfirm(value.trim())}
+            placeholder="e.g. PH-OP"
+            style={{
+              width: "100%", padding: "12px 14px", fontSize: 15, borderRadius: 8,
+              border: "1.5px solid #ddd", outline: "none", marginBottom: 24,
+              letterSpacing: "0.08em", fontFamily: "inherit", boxSizing: "border-box",
+              transition: "border-color 0.15s"
+            }}
+            onFocus={e => e.target.style.borderColor = "#1a1a2e"}
+            onBlur={e => e.target.style.borderColor = "#ddd"}
+          />
+          <button
+            onClick={() => value.trim() && onConfirm(value.trim())}
+            style={{
+              width: "100%", padding: "13px", borderRadius: 8, border: "none",
+              background: value.trim() ? "#1a1a2e" : "#e5e2de",
+              color: value.trim() ? "#fff" : "#aaa",
+              fontSize: 14, fontWeight: 700, cursor: value.trim() ? "pointer" : "default",
+              fontFamily: "inherit", letterSpacing: "0.06em", transition: "all 0.2s"
+            }}
+          >
+            Start Processing →
+          </button>
         </div>
-        <input
-          autoFocus
-          value={value}
-          onChange={e => setValue(e.target.value.toUpperCase())}
-          onKeyDown={e => e.key === "Enter" && value.trim() && onConfirm(value.trim())}
-          placeholder="e.g. PH-OP"
-          style={{
-            width: "100%", padding: "10px 12px", fontSize: 14, borderRadius: 6,
-            border: "1px solid #ddd", outline: "none", marginBottom: 20,
-            boxSizing: "border-box", letterSpacing: "0.05em"
-          }}
-        />
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onCancel} style={{
-            padding: "8px 18px", borderRadius: 6, border: "1px solid #ddd",
-            background: "#fff", color: "#666", fontSize: 13, cursor: "pointer"
-          }}>Cancel</button>
-          <button onClick={() => value.trim() && onConfirm(value.trim())} style={{
-            padding: "8px 18px", borderRadius: 6, border: "none",
-            background: value.trim() ? "#1a1a2e" : "#ccc",
-            color: "#fff", fontSize: 13, cursor: value.trim() ? "pointer" : "default"
-          }}>Apply & Download</button>
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
+          Signed in as {user?.emailAddresses?.[0]?.emailAddress} ·{" "}
+          <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>
+            Sign out
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
+// ── Main app (only shown when signed in) ──────────────────────────────────
 function Dashboard() {
   const { user } = useUser();
   const { getToken } = useAuth();
+  const [bizCode, setBizCode] = useState("");
   const [receipts, setReceipts] = useState([]);
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [bizCodePrompt, setBizCodePrompt] = useState(null); // { type: "csv"|"pdf" }
   const fileRef = useRef();
 
-  const processFiles = useCallback(async (files) => {
+  // Show business code entry screen first
+  if (!bizCode) return <BizCodeScreen onConfirm={setBizCode} />;
+
+  const processFiles = async (files) => {
     setGlobalError(null);
     const newItems = Array.from(files).map(f => ({
       id: Math.random().toString(36).slice(2),
@@ -407,10 +411,7 @@ function Dashboard() {
     }));
     setReceipts(prev => [...prev, ...newItems]);
     setExpandedId(newItems[0]?.id ?? null);
-
-    // Get Clerk session token to authenticate API calls
     const token = await getToken() ?? "";
-
     for (const item of newItems) {
       setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "processing" } : r));
       try {
@@ -428,93 +429,37 @@ function Dashboard() {
         setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "error", error: e.message } : r));
       }
     }
-  }, []);
+  };
 
-  const onDrop = useCallback((e) => {
-    e.preventDefault(); setDragging(false);
-    processFiles(e.dataTransfer.files);
-  }, [processFiles]);
-
+  const onDrop = (e) => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); };
   const updateField = (id, key, value) =>
     setReceipts(prev => prev.map(r => r.id === id ? { ...r, data: { ...r.data, [key]: value } } : r));
+  const removeReceipt = (id) => { setReceipts(prev => prev.filter(r => r.id !== id)); if (expandedId === id) setExpandedId(null); };
 
-  const removeReceipt = (id) => {
-    setReceipts(prev => prev.filter(r => r.id !== id));
-    if (expandedId === id) setExpandedId(null);
-  };
-
-  const doDownloadCSV = (receiptList) => {
-    const groups = groupByBizCode(receiptList);
-    for (const [bizCode, rows] of Object.entries(groups)) {
-      const filename = buildFilename(bizCode, "csv");
-      const blob = new Blob([toCSV(rows)], { type: "text/csv" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-    }
-  };
-
-  const doDownloadPDF = async (receiptList) => {
-    setGeneratingPDF(true);
-    try {
-      const groups = groupByBizCode(receiptList);
-      for (const [bizCode, rows] of Object.entries(groups)) {
-        const filename = buildFilename(bizCode, "pdf");
-        await generatePDF(rows, filename);
-      }
-    } catch (e) {
-      setGlobalError("PDF generation failed. Please try again.");
-    } finally {
-      setGeneratingPDF(false);
-    }
-  };
-
-  const handleBizCodeConfirm = (bizCode) => {
-    // Apply the entered business code to all receipts missing one
-    const updated = receipts.map(r =>
-      r.status === "done" && !r.data.businessCode?.trim()
-        ? { ...r, data: { ...r.data, businessCode: bizCode } }
-        : r
-    );
-    setReceipts(updated);
-    const done = updated.filter(r => r.status === "done");
-    const type = bizCodePrompt?.type;
-    setBizCodePrompt(null);
-    if (type === "csv") doDownloadCSV(done);
-    else doDownloadPDF(done);
-  };
+  const done = receipts.filter(r => r.status === "done");
+  const doneCount = done.length;
+  const processingCount = receipts.filter(r => r.status === "processing").length;
 
   const downloadCSV = () => {
-    const done = receipts.filter(r => r.status === "done");
-    if (!done.length) return;
-    const missing = done.filter(r => !r.data.businessCode?.trim());
-    if (missing.length) { setBizCodePrompt({ type: "csv" }); return; }
-    doDownloadCSV(done);
+    if (!doneCount) return;
+    const blob = new Blob([toCSV(bizCode, done)], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = buildFilename(bizCode, "csv");
+    a.click();
   };
 
-  const downloadPDF = () => {
-    const done = receipts.filter(r => r.status === "done");
-    if (!done.length) return;
-    const missing = done.filter(r => !r.data.businessCode?.trim());
-    if (missing.length) { setBizCodePrompt({ type: "pdf" }); return; }
-    doDownloadPDF(done);
+  const downloadPDF = async () => {
+    if (!doneCount) return;
+    setGeneratingPDF(true);
+    try { await generatePDF(bizCode, done, buildFilename(bizCode, "pdf")); }
+    catch (e) { setGlobalError("PDF generation failed. Please try again."); }
+    finally { setGeneratingPDF(false); }
   };
-
-  const doneCount = receipts.filter(r => r.status === "done").length;
-  const processingCount = receipts.filter(r => r.status === "processing").length;
 
   return (
     <div style={{ minHeight: "100vh", background: "#f4f3f0", fontFamily: "'Lato', sans-serif", color: "#1a1a2e" }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
-
-      {bizCodePrompt && (
-        <BizCodeModal
-          missingCount={receipts.filter(r => r.status === "done" && !r.data.businessCode?.trim()).length}
-          onConfirm={handleBizCodeConfirm}
-          onCancel={() => setBizCodePrompt(null)}
-        />
-      )}
 
       {/* Top bar */}
       <div style={{
@@ -525,11 +470,8 @@ function Dashboard() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
-          <div style={{ fontSize: 11, color: "#8899bb", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            Receipt Processing v2.0
-          </div>
+          <div style={{ fontSize: 13, color: "#7eb8f7", fontWeight: 700, letterSpacing: "0.06em" }}>{bizCode}</div>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {processingCount > 0 && (
             <div style={{ fontSize: 12, color: "#7eb8f7", display: "flex", alignItems: "center", gap: 6 }}>
@@ -542,28 +484,30 @@ function Dashboard() {
             background: doneCount > 0 && !generatingPDF ? "#c0392b" : "#2a3050",
             color: doneCount > 0 && !generatingPDF ? "#fff" : "#4a5070",
             border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12,
-            fontFamily: "inherit", fontWeight: 700,
-            cursor: doneCount > 0 && !generatingPDF ? "pointer" : "not-allowed",
-            letterSpacing: "0.06em", textTransform: "uppercase", transition: "all 0.2s"
+            fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !generatingPDF ? "pointer" : "not-allowed",
+            letterSpacing: "0.06em", textTransform: "uppercase"
           }}>{generatingPDF ? "⟳ Building..." : "↓ PDF"}</button>
           <button onClick={downloadCSV} disabled={doneCount === 0} style={{
             background: doneCount > 0 ? "#2a5298" : "#2a3050",
             color: doneCount > 0 ? "#fff" : "#4a5070",
             border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12,
-            fontFamily: "inherit", fontWeight: 700,
-            cursor: doneCount > 0 ? "pointer" : "not-allowed",
-            letterSpacing: "0.06em", textTransform: "uppercase", transition: "all 0.2s"
+            fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed",
+            letterSpacing: "0.06em", textTransform: "uppercase"
           }}>↓ CSV</button>
           <UserMenu />
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Sub-bar */}
       <div style={{ background: "#eeecea", borderBottom: "1px solid #dddad6", padding: "8px 40px", display: "flex", gap: 20, alignItems: "center", fontSize: 11 }}>
         <span style={{ color: "#888" }}>Field type:</span>
         <TAG color="#2a5298">AI extracted</TAG>
         <TAG color="#b45309">Manual entry</TAG>
-        <span style={{ marginLeft: "auto", color: "#aaa", fontSize: 11 }}>
+        <button onClick={() => { setBizCode(""); setReceipts([]); }} style={{
+          marginLeft: "auto", background: "none", border: "1px solid #ccc", borderRadius: 4,
+          padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
+        }}>← Change Business Code</button>
+        <span style={{ color: "#aaa", fontSize: 11 }}>
           Signed in as {user?.emailAddresses?.[0]?.emailAddress} · 20 scans/day
         </span>
       </div>
@@ -609,7 +553,6 @@ function Dashboard() {
             done:       { bg: "#f0fdf4", color: "#15803d", label: "Complete" },
             error:      { bg: "#fef2f2", color: "#b91c1c", label: "Error" },
           }[r.status];
-
           return (
             <div key={r.id} style={{
               background: "#fff", borderRadius: 8, marginBottom: 12,
@@ -625,7 +568,7 @@ function Dashboard() {
               }}>
                 <img src={r.preview} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid #e5e2de", flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 2 }}>{r.data.invoiceReceipt || r.file.name}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 2 }}>{r.data.supplierName || r.data.invoiceReceipt || r.file.name}</div>
                   <div style={{ fontSize: 12, color: "#999", display: "flex", gap: 16 }}>
                     {r.data.accountDate && <span>📅 {r.data.accountDate}</span>}
                     {r.data.totalExpense && <span>💰 {r.data.totalExpense}</span>}
@@ -635,13 +578,12 @@ function Dashboard() {
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, fontWeight: 700, background: statusStyles.bg, color: statusStyles.color, letterSpacing: "0.05em", textTransform: "uppercase" }}>{statusStyles.label}</span>
                   <span style={{ color: "#bbb", fontSize: 12, display: "inline-block", transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</span>
-                  <button onClick={e => { e.stopPropagation(); removeReceipt(r.id); }} style={{ background: "none", border: "1px solid #e5e2de", color: "#bbb", cursor: "pointer", fontSize: 14, borderRadius: 4, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
+                  <button onClick={e => { e.stopPropagation(); removeReceipt(r.id); }} style={{ background: "none", border: "1px solid #e5e2de", color: "#bbb", cursor: "pointer", fontSize: 14, borderRadius: 4, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = "#fca5a5"; e.currentTarget.style.color = "#b91c1c"; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = "#e5e2de"; e.currentTarget.style.color = "#bbb"; }}
                   >×</button>
                 </div>
               </div>
-
               {isExpanded && (
                 <div style={{ padding: "20px 24px" }}>
                   {r.status === "processing" ? (
@@ -657,8 +599,7 @@ function Dashboard() {
                     <>
                       <div style={{ marginBottom: 20 }}>
                         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#2a5298", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                          <span>AI Extracted Fields</span>
-                          <div style={{ flex: 1, height: 1, background: "#dbeafe" }} />
+                          <span>AI Extracted Fields</span><div style={{ flex: 1, height: 1, background: "#dbeafe" }} />
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
                           {FIELDS.filter(f => f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />)}
@@ -666,8 +607,7 @@ function Dashboard() {
                       </div>
                       <div>
                         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#b45309", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                          <span>Manual Entry Fields</span>
-                          <div style={{ flex: 1, height: 1, background: "#fde68a" }} />
+                          <span>Manual Entry Fields</span><div style={{ flex: 1, height: 1, background: "#fde68a" }} />
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
                           {FIELDS.filter(f => !f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#b45309" />)}
@@ -686,20 +626,19 @@ function Dashboard() {
             <div style={{ fontSize: 13, color: "#666" }}>
               <strong style={{ color: "#1a1a2e" }}>{doneCount}</strong> of <strong style={{ color: "#1a1a2e" }}>{receipts.length}</strong> receipts processed
               {doneCount > 0 && <span style={{ marginLeft: 16, color: "#15803d" }}>✓ Ready to export</span>}
-              {doneCount > 0 && <span style={{ marginLeft: 16, color: "#888", fontSize: 12 }}>PDF: {Math.ceil(doneCount / 4)} page{Math.ceil(doneCount / 4) !== 1 ? "s" : ""}</span>}
+              {doneCount > 0 && <span style={{ marginLeft: 16, color: "#888", fontSize: 12 }}>PDF: {Math.ceil(doneCount / 2)} page{Math.ceil(doneCount / 2) !== 1 ? "s" : ""}</span>}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={downloadPDF} disabled={doneCount === 0 || generatingPDF} style={{ background: doneCount > 0 && !generatingPDF ? "#c0392b" : "#f3f4f6", color: doneCount > 0 && !generatingPDF ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !generatingPDF ? "pointer" : "not-allowed", transition: "all 0.2s" }}>
+              <button onClick={downloadPDF} disabled={doneCount === 0 || generatingPDF} style={{ background: doneCount > 0 && !generatingPDF ? "#c0392b" : "#f3f4f6", color: doneCount > 0 && !generatingPDF ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !generatingPDF ? "pointer" : "not-allowed" }}>
                 {generatingPDF ? "⟳ Building..." : "↓ Download PDF"}
               </button>
-              <button onClick={downloadCSV} disabled={doneCount === 0} style={{ background: doneCount > 0 ? "#1a1a2e" : "#f3f4f6", color: doneCount > 0 ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed", transition: "all 0.2s" }}>
+              <button onClick={downloadCSV} disabled={doneCount === 0} style={{ background: doneCount > 0 ? "#1a1a2e" : "#f3f4f6", color: doneCount > 0 ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed" }}>
                 ↓ Download CSV
               </button>
             </div>
           </div>
         )}
       </div>
-
       <style>{`
         @keyframes shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
         @keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
