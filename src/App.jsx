@@ -379,7 +379,7 @@ function Dashboard() {
   const downloadCSV = () => {
     const done = receipts.filter(r => r.status === "done");
     if (!done.length) return;
-    const blob = new Blob([toCSV(done.map(r => r.data))], { type: "text/csv" });
+    const blob = new Blob([toCSV(done)], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `receipts-${new Date().toISOString().slice(0, 10)}.csv`;
