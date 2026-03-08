@@ -1,9 +1,6 @@
-// api/extract.js — v2 with Clerk authentication
-// Env vars needed: ANTHROPIC_API_KEY, KV_REST_API_URL, KV_REST_API_TOKEN, CLERK_SECRET_KEY
+// api/extract.js — LedgerScan v2
+// Required env vars: ANTHROPIC_API_KEY, CLERK_SECRET_KEY
 
-const DAILY_LIMIT = 20;
-
-// ── Verify Clerk session token ─────────────────────────────────────────────
 async function verifyClerkToken(token) {
   if (!token) return null;
   try {
@@ -16,39 +13,12 @@ async function verifyClerkToken(token) {
       body: JSON.stringify({ token })
     });
     if (!res.ok) return null;
-    return await res.json(); // returns session/user info
+    return await res.json();
   } catch {
     return null;
   }
 }
 
-// ── Vercel KV helpers ──────────────────────────────────────────────────────
-async function kvGet(key) {
-  const res = await fetch(`${process.env.KV_REST_API_URL}/get/${key}`, {
-    headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}` }
-  });
-  return (await res.json()).result ?? null;
-}
-
-async function kvIncr(key) {
-  const res = await fetch(`${process.env.KV_REST_API_URL}/incr/${key}`, {
-    headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}` }
-  });
-  return (await res.json()).result;
-}
-
-async function kvExpireAt(key, ts) {
-  await fetch(`${process.env.KV_REST_API_URL}/expireat/${key}/${ts}`, {
-    headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}` }
-  });
-}
-
-function getMidnightUTC() {
-  const now = new Date();
-  return Math.floor(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).getTime() / 1000);
-}
-
-// ── Handler ────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -56,38 +26,14 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  // ── Auth check ──
+  // Auth check
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.replace("Bearer ", "").trim();
   const session = await verifyClerkToken(token);
-
   if (!session) {
     return res.status(401).json({ error: "Unauthorized. Please sign in." });
   }
 
-  const userId = session.sub || session.user_id || "unknown";
-
-  // ── Rate limit per user (not just IP) ──
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const rateLimitKey = `rl:user:${userId}:${today}`;
-
-  try {
-    const current = await kvGet(rateLimitKey);
-    const count = current ? parseInt(current, 10) : 0;
-    if (count >= DAILY_LIMIT) {
-      return res.status(429).json({
-        error: `Daily limit reached. You can process up to ${DAILY_LIMIT} receipts per day. Try again tomorrow.`,
-        remaining: 0
-      });
-    }
-    const newCount = await kvIncr(rateLimitKey);
-    if (newCount === 1) await kvExpireAt(rateLimitKey, getMidnightUTC());
-    res.setHeader("X-RateLimit-Remaining", DAILY_LIMIT - newCount);
-  } catch (kvErr) {
-    console.error("KV error:", kvErr.message);
-  }
-
-  // ── Extract receipt data ──
   const { base64, mediaType } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
 

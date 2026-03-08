@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import {
-  SignedIn, SignedOut, SignIn, useUser, useClerk
+  SignedIn, SignedOut, SignIn, useUser, useClerk, useAuth
 } from "@clerk/clerk-react";
 
 // ── Field definitions ──────────────────────────────────────────────────────
@@ -258,6 +258,7 @@ function UserMenu() {
 // ── Main app (only shown when signed in) ──────────────────────────────────
 function Dashboard() {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const [receipts, setReceipts] = useState([]);
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
@@ -276,7 +277,7 @@ function Dashboard() {
     setExpandedId(newItems[0]?.id ?? null);
 
     // Get Clerk session token to authenticate API calls
-    const token = await window.__clerk_session?.getToken() ?? "";
+    const token = await getToken() ?? "";
 
     for (const item of newItems) {
       setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "processing" } : r));
