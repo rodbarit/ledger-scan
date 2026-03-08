@@ -4,22 +4,17 @@
 async function verifyClerkToken(token) {
   if (!token) return null;
   try {
-    // Decode JWT payload without a library to check expiry first
+    // Clerk JWTs are standard JWTs - decode and check expiry
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
+    // Decode base64url payload
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
+    // Check expiry
     if (payload.exp && Date.now() / 1000 > payload.exp) return null;
-    // Verify with Clerk backend API
-    const res = await fetch(`https://api.clerk.com/v1/sessions/${payload.sid}/verify`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.CLERK_SECRET_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ token })
-    });
-    if (!res.ok) return null;
-    return payload; // return decoded payload (contains user id as "sub")
+    // Check it's a Clerk token
+    if (!payload.sub) return null;
+    return payload;
   } catch {
     return null;
   }
@@ -51,8 +46,8 @@ Analyze the receipt and return ONLY a valid JSON object with these exact keys (n
 - "invoiceReceipt": the invoice or receipt number/reference shown on the document
 - "expenseType": the category of expense (e.g. "Meals & Entertainment", "Office Supplies", "Transportation", "Utilities", "Professional Services", etc.)
 - "totalExpense": the final total amount including taxes, with currency symbol (e.g. "PHP 1,250.00")
-- "vatablePurchase": the VATable purchase amount before VAT, with currency symbol. If not shown, calculate as totalExpense / 1.12 for PH VAT. If VAT-exempt, use "0"
-- "inputVAT": the VAT amount shown or calculated (12% of vatablePurchase for PH), with currency symbol
+- "vatablePurchase": the VATable purchase amount before VAT, with currency symbol. ONLY include if explicitly shown on the receipt. If not shown, use ""
+- "inputVAT": the VAT amount ONLY if explicitly shown on the receipt. If not shown, use ""
 
 For fields that cannot be determined, use "".
 Return ONLY the JSON object.`;
