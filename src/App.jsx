@@ -7,13 +7,12 @@ import {
 const FIELDS = [
   { key: "accountDate",     label: "Account Date",      ai: true  },
   { key: "invoiceReceipt",  label: "Invoice / Receipt",  ai: true  },
-  { key: "supplierName",    label: "Supplier Name",      ai: true  }, // issuer of the receipt
+  { key: "supplierName",    label: "Supplier Name",      ai: true  },
   { key: "expenseType",     label: "Expense Type",       ai: true  },
   { key: "totalExpense",    label: "Total Expense",      ai: true  },
   { key: "vatablePurchase", label: "VATable Purchase",   ai: true  },
   { key: "inputVAT",        label: "Input VAT",          ai: true  },
   { key: "supplierCode",    label: "Supplier Code",      ai: false },
-  { key: "referenceCode",   label: "Reference Code",     ai: false }, // auto-built
 ];
 
 // Auto-generate reference code from businessCode + invoiceReceipt + accountDate
@@ -40,17 +39,16 @@ function buildFilename(bizCode, ext) {
 }
 
 function toCSV(bizCode, rows) {
-  const header = [...FIELDS.map(f => f.label), "Business Code", "PDF Page"];
+  const header = [...FIELDS.map(f => f.label), "Reference Code", "Business Code", "PDF Page"];
   const lines = [
     header.join(","),
     ...rows.map((r, i) => {
       const pageNum = Math.ceil((i + 1) / 2);
       const pageRef = buildPageRef(bizCode, pageNum);
+      const refCode = buildReferenceCode(bizCode, r.data);
       return [
-        ...ALL_KEYS.map(k => {
-          const val = k === "referenceCode" ? buildReferenceCode(bizCode, r.data) : (r.data[k] || "");
-          return `"${val.replace(/"/g, '""')}"`;
-        }),
+        ...ALL_KEYS.map(k => `"${(r.data[k] || "").replace(/"/g, '""')}"`),
+        `"${refCode}"`,
         `"${bizCode}"`,
         `"${pageRef}"`
       ].join(",");
@@ -611,6 +609,16 @@ function Dashboard() {
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
                           {FIELDS.filter(f => !f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#b45309" />)}
+                          {/* Read-only Reference Code */}
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                              Reference Code
+                              <span style={{ fontSize: 9, background: "#f3f4f6", color: "#9ca3af", padding: "1px 6px", borderRadius: 3, fontWeight: 600, letterSpacing: "0.05em" }}>AUTO</span>
+                            </div>
+                            <div style={{ padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, color: "#374151", fontFamily: "monospace", letterSpacing: "0.03em" }}>
+                              {buildReferenceCode(bizCode, r.data) || <span style={{ color: "#d1d5db" }}>—</span>}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </>
