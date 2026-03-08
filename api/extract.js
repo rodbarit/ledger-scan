@@ -43,11 +43,12 @@ export default async function handler(req, res) {
 Analyze the receipt and return ONLY a valid JSON object with these exact keys (no markdown, no extra text):
 
 - "accountDate": the transaction date in YYYY-MM-DD format
-- "invoiceReceipt": the invoice or receipt number/reference shown on the document
+- "invoiceReceipt": the invoice or receipt number/reference (OR number) shown on the document
 - "expenseType": the category of expense (e.g. "Meals & Entertainment", "Office Supplies", "Transportation", "Utilities", "Professional Services", etc.)
 - "totalExpense": the final total amount including taxes, with currency symbol (e.g. "PHP 1,250.00")
 - "vatablePurchase": the VATable purchase amount before VAT, with currency symbol. ONLY include if explicitly shown on the receipt. If not shown, use ""
 - "inputVAT": the VAT amount ONLY if explicitly shown on the receipt. If not shown, use ""
+- "referenceCode": combine the OR/invoice number and date in this format: <OR Number>-<YYYYMMDD>. Example: if OR number is "0001" and date is 2025-12-30, return "0001-20251230". If either is missing, use ""
 
 For fields that cannot be determined, use "".
 Return ONLY the JSON object.`;
