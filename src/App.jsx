@@ -51,8 +51,28 @@ async function extractReceiptData(base64, mediaType, token) {
   return json.data;
 }
 
+// Build filename: <BusinessCode><YYYYMMDD><HHmmss>
+function buildFilename(bizCode, ext) {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
+  const prefix = (bizCode || "UNKNOWN").trim();
+  return `${prefix}${date}${time}.${ext}`;
+}
+
+// Group receipts by business code
+function groupByBizCode(receipts) {
+  const groups = {};
+  for (const r of receipts) {
+    const key = (r.data.businessCode || "").trim() || "UNKNOWN";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+  return groups;
+}
+
 function toCSV(rows) {
-  // Assign page numbers: 2 receipts per page
+  // Assign page numbers: 2 receipts per page (within this group)
   const header = [...FIELDS.map(f => f.label), "PDF Page"];
   const lines = [
     header.join(","),
@@ -71,7 +91,7 @@ function toCSV(rows) {
   return lines.join("\n");
 }
 
-async function generatePDF(receipts) {
+async function generatePDF(receipts, filename) {
   if (!window.jspdf) {
     await new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -171,7 +191,7 @@ async function generatePDF(receipts) {
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(120, 120, 120);
     pdf.text("Confidential — For accounting purposes only", pageW / 2, pageH - 4, { align: "center" });
   }
-  pdf.save(`receipts-${new Date().toISOString().slice(0, 10)}.pdf`);
+  pdf.save(filename);
 }
 
 function getImageDataURL(src, type) {
@@ -321,6 +341,52 @@ function UserMenu() {
 }
 
 // ── Main app (only shown when signed in) ──────────────────────────────────
+function BizCodeModal({ missingCount, onConfirm, onCancel }) {
+  const [value, setValue] = useState("");
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 10, padding: 32, width: 360,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18)", fontFamily: "'Lato', sans-serif"
+      }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>
+          Business Code Required
+        </div>
+        <div style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
+          {missingCount} receipt{missingCount > 1 ? "s are" : " is"} missing a Business Code.
+          Enter one to apply to all of them before downloading.
+        </div>
+        <input
+          autoFocus
+          value={value}
+          onChange={e => setValue(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === "Enter" && value.trim() && onConfirm(value.trim())}
+          placeholder="e.g. PH-OP"
+          style={{
+            width: "100%", padding: "10px 12px", fontSize: 14, borderRadius: 6,
+            border: "1px solid #ddd", outline: "none", marginBottom: 20,
+            boxSizing: "border-box", letterSpacing: "0.05em"
+          }}
+        />
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={{
+            padding: "8px 18px", borderRadius: 6, border: "1px solid #ddd",
+            background: "#fff", color: "#666", fontSize: 13, cursor: "pointer"
+          }}>Cancel</button>
+          <button onClick={() => value.trim() && onConfirm(value.trim())} style={{
+            padding: "8px 18px", borderRadius: 6, border: "none",
+            background: value.trim() ? "#1a1a2e" : "#ccc",
+            color: "#fff", fontSize: 13, cursor: value.trim() ? "pointer" : "default"
+          }}>Apply & Download</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { user } = useUser();
   const { getToken } = useAuth();
@@ -329,6 +395,7 @@ function Dashboard() {
   const [globalError, setGlobalError] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [bizCodePrompt, setBizCodePrompt] = useState(null); // { type: "csv"|"pdf" }
   const fileRef = useRef();
 
   const processFiles = useCallback(async (files) => {
@@ -376,23 +443,62 @@ function Dashboard() {
     if (expandedId === id) setExpandedId(null);
   };
 
+  const doDownloadCSV = (receiptList) => {
+    const groups = groupByBizCode(receiptList);
+    for (const [bizCode, rows] of Object.entries(groups)) {
+      const filename = buildFilename(bizCode, "csv");
+      const blob = new Blob([toCSV(rows)], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    }
+  };
+
+  const doDownloadPDF = async (receiptList) => {
+    setGeneratingPDF(true);
+    try {
+      const groups = groupByBizCode(receiptList);
+      for (const [bizCode, rows] of Object.entries(groups)) {
+        const filename = buildFilename(bizCode, "pdf");
+        await generatePDF(rows, filename);
+      }
+    } catch (e) {
+      setGlobalError("PDF generation failed. Please try again.");
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
+  const handleBizCodeConfirm = (bizCode) => {
+    // Apply the entered business code to all receipts missing one
+    const updated = receipts.map(r =>
+      r.status === "done" && !r.data.businessCode?.trim()
+        ? { ...r, data: { ...r.data, businessCode: bizCode } }
+        : r
+    );
+    setReceipts(updated);
+    const done = updated.filter(r => r.status === "done");
+    const type = bizCodePrompt?.type;
+    setBizCodePrompt(null);
+    if (type === "csv") doDownloadCSV(done);
+    else doDownloadPDF(done);
+  };
+
   const downloadCSV = () => {
     const done = receipts.filter(r => r.status === "done");
     if (!done.length) return;
-    const blob = new Blob([toCSV(done)], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `receipts-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+    const missing = done.filter(r => !r.data.businessCode?.trim());
+    if (missing.length) { setBizCodePrompt({ type: "csv" }); return; }
+    doDownloadCSV(done);
   };
 
-  const downloadPDF = async () => {
+  const downloadPDF = () => {
     const done = receipts.filter(r => r.status === "done");
     if (!done.length) return;
-    setGeneratingPDF(true);
-    try { await generatePDF(done); }
-    catch (e) { setGlobalError("PDF generation failed. Please try again."); }
-    finally { setGeneratingPDF(false); }
+    const missing = done.filter(r => !r.data.businessCode?.trim());
+    if (missing.length) { setBizCodePrompt({ type: "pdf" }); return; }
+    doDownloadPDF(done);
   };
 
   const doneCount = receipts.filter(r => r.status === "done").length;
@@ -401,6 +507,14 @@ function Dashboard() {
   return (
     <div style={{ minHeight: "100vh", background: "#f4f3f0", fontFamily: "'Lato', sans-serif", color: "#1a1a2e" }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+      {bizCodePrompt && (
+        <BizCodeModal
+          missingCount={receipts.filter(r => r.status === "done" && !r.data.businessCode?.trim()).length}
+          onConfirm={handleBizCodeConfirm}
+          onCancel={() => setBizCodePrompt(null)}
+        />
+      )}
 
       {/* Top bar */}
       <div style={{
