@@ -339,7 +339,7 @@ function LoginScreen() {
           LedgerScan
         </div>
         <div style={{ fontSize: 13, color: "#999", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Receipt Processing v2.0
+          Receipt Processing
         </div>
       </div>
       <SignIn
@@ -435,7 +435,7 @@ function BizCodeScreen({ onConfirm }) {
       <div style={{ width: 400 }} className="biz-screen-width">
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
-          <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Receipt Processing v2.0</div>
+          <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Receipt Processing</div>
         </div>
 
         <div style={{ background: "#fff", borderRadius: 12, padding: 36, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid #e5e2de" }}>
@@ -664,7 +664,7 @@ function Dashboard() {
           padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
         }}>← Change Business Code</button>
         <span className="subbar-right" style={{ color: "#aaa", fontSize: 11 }}>
-          Signed in as {user?.emailAddresses?.[0]?.emailAddress} · 20 scans/day
+          Signed in as {user?.emailAddresses?.[0]?.emailAddress}
         </span>
       </div>
 
@@ -692,6 +692,19 @@ function Dashboard() {
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 600, marginBottom: 6 }}>Upload Receipt Images</div>
           <div style={{ fontSize: 12, color: "#999" }}>Drag & drop or click to browse · JPG, PNG, WEBP · Multiple files</div>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => processFiles(e.target.files)} />
+        </div>
+
+        {/* Disclaimer */}
+        <div style={{
+          background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8,
+          padding: "10px 16px", marginBottom: 20,
+          display: "flex", alignItems: "flex-start", gap: 10, fontSize: 12, color: "#92400e"
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+          <span>
+            <strong>AI Disclaimer:</strong> AI can make mistakes, especially with handwritten receipts.
+            Always double-check extracted fields by tapping the receipt thumbnail to view the original image.
+          </span>
         </div>
 
         {receipts.length === 0 && (

@@ -63,7 +63,7 @@ export default async function handler(req, res) {
           </ul>
           <p style="color: #888; font-size: 12px;">
             Confidential — For accounting purposes only.<br/>
-            This email was sent from LedgerScan Receipt Processing v2.0.
+            This email was sent from LedgerScan Receipt Processing.
           </p>
         </div>
       `,
