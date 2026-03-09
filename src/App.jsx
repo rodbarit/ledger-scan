@@ -762,6 +762,10 @@ function Dashboard() {
                           <span>AI Extracted Fields</span><div style={{ flex: 1, height: 1, background: "#dbeafe" }} />
                         </div>
                         <div className="fields-grid">
+                          {/* Regular AI fields from FIELDS array */}
+                          {FIELDS.filter(f => f.ai).map(f => (
+                            <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />
+                          ))}
                           {/* Total Expense — auto-computed from VATable + NonVAT */}
                           <div>
                             <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
