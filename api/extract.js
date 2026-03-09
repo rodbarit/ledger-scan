@@ -35,10 +35,19 @@ export default async function handler(req, res) {
 
 Analyze the receipt and return ONLY a valid JSON object with these exact keys (no markdown, no extra text):
 
-- "accountDate": the transaction date in YYYY-MM-DD format
+- "accountDate": the transaction date in YYYY-MM-DD format. 
+  IMPORTANT date reading rules:
+  - Philippine receipts commonly use M/DD/YYYY or MM/DD/YYYY format (month first, then day)
+  - Example: "1/14/2025" or "1/14 2025" means January 14, 2025 → "2025-01-14"
+  - Example: "12/3/2024" means December 3, 2024 → "2024-12-03"
+  - For handwritten dates like "1/14 20__", the first number is the MONTH, second is the DAY
+  - Never swap month and day — always treat the first number as month for Philippine receipts
+  - If only 2 digits are written for year (e.g. "25"), assume 20XX → 2025
+  - Look carefully at handwritten numbers — "1" and "7" can look similar, "5" and "6" can look similar
+
 - "invoiceReceipt": the invoice or receipt number/reference (OR number) shown on the document
 - "supplierName": the name of the business or establishment that issued the receipt (e.g. "Petron", "McDonald's", "SM Supermarket")
-- "expenseType": the category of expense (e.g. "Meals & Entertainment", "Office Supplies", "Transportation", "Utilities", "Professional Services", "Gas", etc.)
+- "expenseType": the category of expense (e.g. "Meals & Entertainment", "Office Supplies", "Transportation", "Utilities", "Professional Services", "Gas", "Building Materials", etc.)
 - "vatablePurchase": the VATable purchase amount (taxable base, BEFORE VAT is added), with currency symbol. ONLY include if the receipt explicitly shows a VATable/taxable amount. If not shown, use ""
 - "nonVAT": the VAT-exempt or zero-rated purchase amount, with currency symbol. Use this when:
     (a) the receipt explicitly shows a NonVAT / VAT-exempt / zero-rated amount, OR
