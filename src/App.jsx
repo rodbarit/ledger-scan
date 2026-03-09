@@ -5,15 +5,31 @@ import {
 
 // ── Field definitions ──────────────────────────────────────────────────────
 const FIELDS = [
-  { key: "accountDate",     label: "Account Date",      ai: true  },
-  { key: "invoiceReceipt",  label: "Invoice / Receipt",  ai: true  },
-  { key: "supplierName",    label: "Supplier Name",      ai: true  },
-  { key: "expenseType",     label: "Expense Type",       ai: true  },
-  { key: "totalExpense",    label: "Total Expense",      ai: true  },
-  { key: "vatablePurchase", label: "VATable Purchase",   ai: true  },
-  { key: "inputVAT",        label: "Input VAT",          ai: true  },
-  { key: "supplierCode",    label: "Supplier Code",      ai: false },
+  { key: "accountDate",      label: "Account Date",       ai: true  },
+  { key: "invoiceReceipt",   label: "Invoice / Receipt",  ai: true  },
+  { key: "supplierName",     label: "Supplier Name",      ai: true  },
+  { key: "expenseType",      label: "Expense Type",       ai: true  },
+  { key: "vatablePurchase",  label: "VATable Purchase",   ai: true  },
+  { key: "nonVAT",           label: "NonVAT",             ai: true  },
+  { key: "inputVAT",         label: "Input VAT",          ai: true  },
+  { key: "supplierCode",     label: "Supplier Code",      ai: false },
 ];
+
+// Parse a PHP amount string to a number e.g. "PHP 1,234.56" → 1234.56
+function parseAmount(str) {
+  if (!str) return 0;
+  const n = parseFloat(str.replace(/[^0-9.]/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+
+// Auto-compute Total Expense = VATable + NonVAT, formatted as "PHP X.XX"
+function computeTotalExpense(data) {
+  const vatable = parseAmount(data.vatablePurchase);
+  const nonvat  = parseAmount(data.nonVAT);
+  if (!vatable && !nonvat) return "";
+  const total = vatable + nonvat;
+  return `PHP ${total.toFixed(2)}`;
+}
 
 // Auto-generate reference code from businessCode + invoiceReceipt + accountDate
 function buildReferenceCode(bizCode, data) {
@@ -39,18 +55,25 @@ function buildFilename(bizCode, ext) {
 }
 
 function toCSV(bizCode, rows) {
-  const header = [...FIELDS.map(f => f.label), "Reference Code", "Business Code", "PDF Page"];
+  const header = [
+    "Account Date", "Invoice / Receipt", "Supplier Name", "Expense Type",
+    "VATable Purchase", "NonVAT", "Input VAT",
+    "Total Expense", "Total Amount Due",
+    "Supplier Code", "Reference Code", "Business Code", "PDF Page"
+  ];
   const lines = [
     header.join(","),
     ...rows.map((r, i) => {
       const pageNum = Math.ceil((i + 1) / 2);
       const pageRef = buildPageRef(bizCode, pageNum);
       const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
+      const totalExpense = computeTotalExpense(r.data);
+      const q = v => `"${(v || "").replace(/"/g, '""')}"`;
       return [
-        ...ALL_KEYS.map(k => `"${(r.data[k] || "").replace(/"/g, '""')}"`),
-        `"${refCode}"`,
-        `"${bizCode}"`,
-        `"${pageRef}"`
+        q(r.data.accountDate), q(r.data.invoiceReceipt), q(r.data.supplierName), q(r.data.expenseType),
+        q(r.data.vatablePurchase), q(r.data.nonVAT), q(r.data.inputVAT),
+        q(totalExpense), q(r.data.totalAmountDue),
+        q(r.data.supplierCode), q(refCode), q(bizCode), q(pageRef)
       ].join(",");
     })
   ];
@@ -147,7 +170,7 @@ async function generatePDF(bizCode, receipts, filename) {
       const refCode  = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
       const supplier = r.data.supplierName || r.data.invoiceReceipt || "—";
       const category = r.data.expenseType || "—";
-      const total    = r.data.totalExpense || "—";
+      const total    = r.data.totalAmountDue || computeTotalExpense(r.data) || "—";
 
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0, 0, 0);
       let rx = margin;
@@ -170,6 +193,84 @@ async function generatePDF(bizCode, receipts, filename) {
     pdf.text("Confidential — For accounting purposes only", pageW / 2, pageH - 4, { align: "center" });
   }
   pdf.save(filename);
+}
+
+// Same as generatePDF but returns base64 string for emailing
+async function generatePDFBase64(bizCode, receipts) {
+  if (!window.jspdf) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      script.onload = resolve; script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = 210, pageH = 297, margin = 10, gap = 4;
+  const cellW = (pageW - margin * 2 - gap) / 2;
+  const footerRowH = 7, colHeaderH = 8;
+  const pages = [];
+  for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
+  const c1 = 60, c2 = 38, c3 = 50;
+  const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
+  for (let p = 0; p < pages.length; p++) {
+    if (p > 0) pdf.addPage();
+    const group = pages[p];
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(10); pdf.setTextColor(0,0,0);
+    pdf.text(bizCode || "—", margin, margin + 5);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(8);
+    pdf.text(`Page ${p+1} of ${pages.length}`, pageW - margin, margin + 5, { align: "right" });
+    pdf.setDrawColor(0); pdf.setLineWidth(0.3);
+    pdf.line(margin, margin + 8, pageW - margin, margin + 8);
+    const tableH = colHeaderH + group.length * footerRowH;
+    const imgAreaY = margin + 12;
+    const imgAreaH = pageH - imgAreaY - tableH - margin - 8;
+    for (let i = 0; i < group.length; i++) {
+      const r = group[i];
+      const x = margin + i * (cellW + gap);
+      pdf.setDrawColor(0); pdf.setLineWidth(0.2);
+      pdf.rect(x, imgAreaY, cellW, imgAreaH);
+      if (r.preview) {
+        try {
+          const imgData = await getImageDataURL(r.preview, r.file?.type || "image/jpeg");
+          const imgFormat = (r.file?.type || "").includes("png") ? "PNG" : "JPEG";
+          pdf.addImage(imgData, imgFormat, x+0.5, imgAreaY+0.5, cellW-1, imgAreaH-1, "", "FAST");
+        } catch {}
+      }
+    }
+    const tableY = pageH - margin - tableH - 6;
+    pdf.setDrawColor(0); pdf.setLineWidth(0.3);
+    pdf.line(margin, tableY - 1, pageW - margin, tableY - 1);
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(0,0,0);
+    let hx = margin;
+    pdf.text("REFERENCE CODE", hx, tableY+5); hx += c1;
+    pdf.text("SUPPLIER", hx, tableY+5); hx += c2;
+    pdf.text("CATEGORY", hx, tableY+5); hx += c3;
+    pdf.text("TOTAL", hx, tableY+5);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, tableY+colHeaderH-1, pageW-margin, tableY+colHeaderH-1);
+    for (let i = 0; i < group.length; i++) {
+      const r = group[i];
+      const rowY = tableY + colHeaderH + i * footerRowH;
+      const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
+      const supplier = r.data.supplierName || "—";
+      const category = r.data.expenseType || "—";
+      const total = r.data.totalAmountDue || computeTotalExpense(r.data) || "—";
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0,0,0);
+      let rx = margin;
+      pdf.text(tr(refCode,32), rx, rowY+4.5); rx += c1;
+      pdf.text(tr(supplier,20), rx, rowY+4.5); rx += c2;
+      pdf.text(tr(category,25), rx, rowY+4.5); rx += c3;
+      pdf.text(tr(total,18), rx, rowY+4.5);
+      if (i < group.length - 1) { pdf.setLineWidth(0.1); pdf.setDrawColor(180,180,180); pdf.line(margin, rowY+footerRowH, pageW-margin, rowY+footerRowH); }
+    }
+    pdf.setLineWidth(0.3); pdf.setDrawColor(0);
+    pdf.line(margin, tableY+tableH-1, pageW-margin, tableY+tableH-1);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(120,120,120);
+    pdf.text("Confidential — For accounting purposes only", pageW/2, pageH-4, { align: "center" });
+  }
+  return btoa(pdf.output());
 }
 
 function getImageDataURL(src, type) {
@@ -331,7 +432,7 @@ function BizCodeScreen({ onConfirm }) {
       fontFamily: "'Lato', sans-serif"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
-      <div style={{ width: 400 }}>
+      <div style={{ width: 400 }} className="biz-screen-width">
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
           <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Receipt Processing v2.0</div>
@@ -394,7 +495,9 @@ function Dashboard() {
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [lightbox, setLightbox] = useState(null); // preview URL
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
   const fileRef = useRef();
 
   // Show business code entry screen first
@@ -455,22 +558,70 @@ function Dashboard() {
     finally { setGeneratingPDF(false); }
   };
 
+  const sendEmail = async () => {
+    if (!doneCount) return;
+    setSendingEmail(true);
+    try {
+      // Generate PDF as base64
+      const pdfBase64 = await generatePDFBase64(bizCode, done);
+      const csvContent = toCSV(bizCode, done);
+      const csvBase64 = btoa(unescape(encodeURIComponent(csvContent)));
+      const filename = buildFilename(bizCode, "");
+      const email = user?.emailAddresses?.[0]?.emailAddress;
+      const token = await getToken() ?? "";
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ to: email, bizCode, filename, pdfBase64, csvBase64 })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to send");
+      setGlobalError(null);
+      alert(`✓ Files sent to ${email}`);
+    } catch (e) {
+      setGlobalError("Email failed: " + e.message);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#f4f3f0", fontFamily: "'Lato', sans-serif", color: "#1a1a2e" }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 
+      {/* Lightbox */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 2000,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: "95vw", maxHeight: "92vh" }}>
+            <img src={lightbox} alt="Receipt" style={{
+              maxWidth: "100%", maxHeight: "88vh", borderRadius: 8,
+              boxShadow: "0 8px 40px rgba(0,0,0,0.5)", display: "block"
+            }} />
+            <button onClick={() => setLightbox(null)} style={{
+              position: "absolute", top: -14, right: -14, width: 32, height: 32,
+              borderRadius: "50%", background: "#fff", border: "none", fontSize: 18,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.3)", fontWeight: 700, color: "#333"
+            }}>×</button>
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
-      <div style={{
-        background: "#1a1a2e", color: "#fff", padding: "0 40px",
+      <div className="topbar-pad" style={{
+        background: "#1a1a2e", color: "#fff",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         height: 56, borderBottom: "3px solid #2a5298"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
+          <div className="topbar-brand" style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
           <div style={{ fontSize: 13, color: "#7eb8f7", fontWeight: 700, letterSpacing: "0.06em" }}>{bizCode}</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {processingCount > 0 && (
             <div style={{ fontSize: 12, color: "#7eb8f7", display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span>
@@ -492,12 +643,19 @@ function Dashboard() {
             fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed",
             letterSpacing: "0.06em", textTransform: "uppercase"
           }}>↓ CSV</button>
+          <button onClick={sendEmail} disabled={doneCount === 0 || sendingEmail} style={{
+            background: doneCount > 0 && !sendingEmail ? "#15803d" : "#2a3050",
+            color: doneCount > 0 && !sendingEmail ? "#fff" : "#4a5070",
+            border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12,
+            fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !sendingEmail ? "pointer" : "not-allowed",
+            letterSpacing: "0.06em", textTransform: "uppercase"
+          }}>{sendingEmail ? "⟳ Sending..." : "✉ Email"}</button>
           <UserMenu />
         </div>
       </div>
 
       {/* Sub-bar */}
-      <div style={{ background: "#eeecea", borderBottom: "1px solid #dddad6", padding: "8px 40px", display: "flex", gap: 20, alignItems: "center", fontSize: 11 }}>
+      <div className="subbar-pad" style={{ background: "#eeecea", borderBottom: "1px solid #dddad6", display: "flex", gap: 20, alignItems: "center", fontSize: 11 }}>
         <span style={{ color: "#888" }}>Field type:</span>
         <TAG color="#2a5298">AI extracted</TAG>
         <TAG color="#b45309">Manual entry</TAG>
@@ -505,12 +663,12 @@ function Dashboard() {
           marginLeft: "auto", background: "none", border: "1px solid #ccc", borderRadius: 4,
           padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
         }}>← Change Business Code</button>
-        <span style={{ color: "#aaa", fontSize: 11 }}>
+        <span className="subbar-right" style={{ color: "#aaa", fontSize: 11 }}>
           Signed in as {user?.emailAddresses?.[0]?.emailAddress} · 20 scans/day
         </span>
       </div>
 
-      <div style={{ padding: "28px 40px", maxWidth: 1300, margin: "0 auto" }}>
+      <div className="page-pad" style={{ maxWidth: 1300, margin: "0 auto" }}>
         {globalError && (
           <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#b91c1c", display: "flex", justifyContent: "space-between" }}>
             <span>⚠ {globalError}</span>
@@ -524,10 +682,9 @@ function Dashboard() {
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onClick={() => fileRef.current.click()}
+          className="upload-zone"
           style={{
             border: `2px dashed ${dragging ? "#2a5298" : "#c8c4be"}`,
-            borderRadius: 8, padding: "36px", textAlign: "center",
-            cursor: "pointer", marginBottom: 28, transition: "all 0.2s",
             background: dragging ? "#eef3fb" : "#fff"
           }}
         >
@@ -559,17 +716,22 @@ function Dashboard() {
               overflow: "hidden", animation: "fadeIn 0.3s ease forwards",
               animationDelay: `${idx * 0.04}s`, opacity: 0
             }}>
-              <div onClick={() => setExpandedId(isExpanded ? null : r.id)} style={{
-                display: "flex", alignItems: "center", gap: 16, padding: "14px 20px",
+              <div onClick={() => setExpandedId(isExpanded ? null : r.id)} className="card-row" style={{
+                display: "flex", alignItems: "center",
                 cursor: "pointer", background: isExpanded ? "#f8f7f5" : "#fff",
                 borderBottom: isExpanded ? "1px solid #e5e2de" : "none", transition: "background 0.15s"
               }}>
-                <img src={r.preview} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid #e5e2de", flexShrink: 0 }} />
+                <img
+                  src={r.preview} alt=""
+                  onClick={e => { e.stopPropagation(); setLightbox(r.preview); }}
+                  style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid #e5e2de", flexShrink: 0, cursor: "zoom-in" }}
+                  title="Tap to view receipt"
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 2 }}>{r.data.supplierName || r.data.invoiceReceipt || r.file.name}</div>
                   <div style={{ fontSize: 12, color: "#999", display: "flex", gap: 16 }}>
                     {r.data.accountDate && <span>📅 {r.data.accountDate}</span>}
-                    {r.data.totalExpense && <span>💰 {r.data.totalExpense}</span>}
+                    {r.data.totalAmountDue && <span>💰 {r.data.totalAmountDue}</span>}
                     {r.data.expenseType && <span>🏷 {r.data.expenseType}</span>}
                   </div>
                 </div>
@@ -583,7 +745,7 @@ function Dashboard() {
                 </div>
               </div>
               {isExpanded && (
-                <div style={{ padding: "20px 24px" }}>
+                <div className="card-body">
                   {r.status === "processing" ? (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                       {ALL_KEYS.map(k => (
@@ -599,8 +761,24 @@ function Dashboard() {
                         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#2a5298", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                           <span>AI Extracted Fields</span><div style={{ flex: 1, height: 1, background: "#dbeafe" }} />
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-                          {FIELDS.filter(f => f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />)}
+                        <div className="fields-grid">
+                          {/* Total Expense — auto-computed from VATable + NonVAT */}
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                              Total Expense
+                              <span style={{ fontSize: 9, background: "#dcfce7", color: "#15803d", padding: "1px 6px", borderRadius: 3, fontWeight: 600, letterSpacing: "0.05em" }}>COMPUTED</span>
+                            </div>
+                            <div style={{ padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, fontSize: 13, color: "#15803d", fontWeight: 600 }}>
+                              {computeTotalExpense(r.data) || <span style={{ color: "#d1d5db", fontWeight: 400 }}>VATable + NonVAT</span>}
+                            </div>
+                          </div>
+                          {/* Total Amount Due — AI extracted */}
+                          <FieldInput
+                            field={{ key: "totalAmountDue", label: "Total Amount Due", ai: true }}
+                            value={r.data.totalAmountDue}
+                            onChange={v => updateField(r.id, "totalAmountDue", v)}
+                            accentColor="#2a5298"
+                          />
                           {/* Reference Code — auto-built but editable */}
                           <div>
                             <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
@@ -621,7 +799,7 @@ function Dashboard() {
                         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#b45309", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                           <span>Manual Entry Fields</span><div style={{ flex: 1, height: 1, background: "#fde68a" }} />
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+                        <div className="fields-grid">
                           {FIELDS.filter(f => !f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#b45309" />)}
                         </div>
                       </div>
@@ -634,7 +812,7 @@ function Dashboard() {
         })}
 
         {receipts.length > 0 && (
-          <div style={{ marginTop: 20, padding: "16px 24px", background: "#fff", borderRadius: 8, border: "1px solid #e5e2de", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div className="export-bar" style={{ marginTop: 20, background: "#fff", borderRadius: 8, border: "1px solid #e5e2de", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: 13, color: "#666" }}>
               <strong style={{ color: "#1a1a2e" }}>{doneCount}</strong> of <strong style={{ color: "#1a1a2e" }}>{receipts.length}</strong> receipts processed
               {doneCount > 0 && <span style={{ marginLeft: 16, color: "#15803d" }}>✓ Ready to export</span>}
@@ -647,6 +825,9 @@ function Dashboard() {
               <button onClick={downloadCSV} disabled={doneCount === 0} style={{ background: doneCount > 0 ? "#1a1a2e" : "#f3f4f6", color: doneCount > 0 ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed" }}>
                 ↓ Download CSV
               </button>
+              <button onClick={sendEmail} disabled={doneCount === 0 || sendingEmail} style={{ background: doneCount > 0 && !sendingEmail ? "#15803d" : "#f3f4f6", color: doneCount > 0 && !sendingEmail ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !sendingEmail ? "pointer" : "not-allowed" }}>
+                {sendingEmail ? "⟳ Sending..." : "✉ Email to Me"}
+              </button>
             </div>
           </div>
         )}
@@ -657,6 +838,33 @@ function Dashboard() {
         @keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
         * { box-sizing: border-box; }
         input::placeholder { color: #ccc; }
+
+        .fields-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .page-pad { padding: 28px 40px; }
+        .topbar-pad { padding: 0 40px; }
+        .subbar-pad { padding: 8px 40px; }
+        .card-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; }
+        .card-body { padding: 20px 24px; }
+        .export-bar { margin-top: 20px; padding: 16px 24px; background: #fff; border-radius: 8; border: 1px solid #e5e2de; display: flex; align-items: center; justify-content: space-between; }
+        .upload-zone { border-radius: 8px; padding: 36px; text-align: center; cursor: pointer; margin-bottom: 28px; transition: all 0.2s; }
+        .biz-screen-width { width: 400px; }
+
+        @media (max-width: 640px) {
+          .fields-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+          .page-pad { padding: 16px !important; }
+          .topbar-pad { padding: 0 16px !important; height: auto !important; flex-wrap: wrap; gap: 8px; padding-top: 10px !important; padding-bottom: 10px !important; }
+          .subbar-pad { padding: 8px 16px !important; flex-wrap: wrap; gap: 8px; }
+          .card-row { padding: 12px 14px !important; gap: 10px !important; }
+          .card-body { padding: 14px 14px !important; }
+          .upload-zone { padding: 24px 16px !important; margin-bottom: 16px !important; }
+          .biz-screen-width { width: 100% !important; padding: 0 16px; }
+          .export-bar { flex-direction: column !important; gap: 12px !important; align-items: stretch !important; }
+          .export-bar > div:last-child { display: flex; flex-direction: column; gap: 8px; }
+          .export-bar button { width: 100% !important; padding: 13px !important; font-size: 14px !important; }
+          .topbar-actions { flex-wrap: wrap; gap: 8px !important; justify-content: flex-end; }
+          .topbar-brand { font-size: 16px !important; }
+          .subbar-right { display: none !important; }
+        }
       `}</style>
     </div>
   );
