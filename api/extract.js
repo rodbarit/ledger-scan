@@ -4,15 +4,11 @@
 async function verifyClerkToken(token) {
   if (!token) return null;
   try {
-    // Clerk JWTs are standard JWTs - decode and check expiry
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-    // Decode base64url payload
     const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
-    // Check expiry
     if (payload.exp && Date.now() / 1000 > payload.exp) return null;
-    // Check it's a Clerk token
     if (!payload.sub) return null;
     return payload;
   } catch {
@@ -27,18 +23,15 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  // Auth check
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.replace("Bearer ", "").trim();
   const session = await verifyClerkToken(token);
-  if (!session) {
-    return res.status(401).json({ error: "Unauthorized. Please sign in." });
-  }
+  if (!session) return res.status(401).json({ error: "Unauthorized. Please sign in." });
 
   const { base64, mediaType } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
 
-  const prompt = `You are an accounting assistant that extracts structured data from receipt images.
+  const prompt = `You are an accounting assistant that extracts structured data from receipt images for Philippine BIR compliance.
 
 Analyze the receipt and return ONLY a valid JSON object with these exact keys (no markdown, no extra text):
 
@@ -46,13 +39,21 @@ Analyze the receipt and return ONLY a valid JSON object with these exact keys (n
 - "invoiceReceipt": the invoice or receipt number/reference (OR number) shown on the document
 - "supplierName": the name of the business or establishment that issued the receipt (e.g. "Petron", "McDonald's", "SM Supermarket")
 - "expenseType": the category of expense (e.g. "Meals & Entertainment", "Office Supplies", "Transportation", "Utilities", "Professional Services", "Gas", etc.)
-- "totalExpense": the final total amount including taxes, with currency symbol (e.g. "PHP 1,250.00")
-- "vatablePurchase": the VATable purchase amount before VAT, with currency symbol. ONLY include if explicitly shown on the receipt. If not shown, use ""
-- "inputVAT": the VAT amount ONLY if explicitly shown on the receipt. If not shown, use ""
+- "vatablePurchase": the VATable purchase amount (taxable base, BEFORE VAT is added), with currency symbol. ONLY include if the receipt explicitly shows a VATable/taxable amount. If not shown, use ""
+- "nonVAT": the VAT-exempt or zero-rated purchase amount, with currency symbol. Use this when:
+    (a) the receipt explicitly shows a NonVAT / VAT-exempt / zero-rated amount, OR
+    (b) the receipt has no VAT breakdown at all (no VATable line, no VAT line) — in this case put the full purchase amount here
+    If not applicable, use ""
+- "inputVAT": the VAT amount (12% tax), ONLY if explicitly shown as a separate line on the receipt. If not shown, use ""
+- "totalAmountDue": the final total amount actually paid, with currency symbol (e.g. "PHP 1,250.00"). This is the grand total printed on the receipt.
 - "referenceCode": leave this as ""
 
-For fields that cannot be determined, use "".
-Return ONLY the JSON object.`;
+Rules:
+- VAT receipt: vatablePurchase = taxable base, inputVAT = 12% VAT, nonVAT = ""
+- NonVAT receipt (no VAT breakdown): nonVAT = full amount, vatablePurchase = "", inputVAT = ""
+- totalAmountDue is always the grand total the customer paid
+- For fields that cannot be determined, use ""
+- Return ONLY the JSON object, no other text`;
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
