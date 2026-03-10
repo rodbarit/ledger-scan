@@ -425,6 +425,7 @@ function BizCodeScreen({ onConfirm }) {
   const { signOut } = useClerk();
   const [value, setValue] = useState("");
   const [vatRegistered, setVatRegistered] = useState(null);
+  const [entryType, setEntryType] = useState(null);
 
   return (
     <div style={{
@@ -451,7 +452,7 @@ function BizCodeScreen({ onConfirm }) {
             autoFocus
             value={value}
             onChange={e => setValue(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === "Enter" && value.trim() && vatRegistered !== null && onConfirm(value.trim(), vatRegistered)}
+            onKeyDown={e => e.key === "Enter" && value.trim() && vatRegistered !== null && entryType !== null && onConfirm(value.trim(), vatRegistered, entryType)}
             placeholder="e.g. PH-OP"
             style={{
               width: "100%", padding: "12px 14px", fontSize: 15, borderRadius: 8,
@@ -483,13 +484,33 @@ function BizCodeScreen({ onConfirm }) {
             ))}
           </div>
 
+          <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#666", display: "block", marginBottom: 10 }}>
+            Entry Type <span style={{ color: "#c0392b" }}>*</span>
+          </label>
+          <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+            {[{ label: "Expenses", val: "expenses" }, { label: "Sales", val: "sales" }].map(({ label, val }) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setEntryType(val)}
+                style={{
+                  flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${entryType === val ? "#1a1a2e" : "#ddd"}`,
+                  background: entryType === val ? "#1a1a2e" : "#fff",
+                  color: entryType === val ? "#fff" : "#555",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", transition: "all 0.15s"
+                }}
+              >{label}</button>
+            ))}
+          </div>
+
           <button
-            onClick={() => value.trim() && vatRegistered !== null && onConfirm(value.trim(), vatRegistered)}
+            onClick={() => value.trim() && vatRegistered !== null && entryType !== null && onConfirm(value.trim(), vatRegistered, entryType)}
             style={{
               width: "100%", padding: "13px", borderRadius: 8, border: "none",
-              background: value.trim() && vatRegistered !== null ? "#1a1a2e" : "#e5e2de",
-              color: value.trim() && vatRegistered !== null ? "#fff" : "#aaa",
-              fontSize: 14, fontWeight: 700, cursor: value.trim() && vatRegistered !== null ? "pointer" : "default",
+              background: value.trim() && vatRegistered !== null && entryType !== null ? "#1a1a2e" : "#e5e2de",
+              color: value.trim() && vatRegistered !== null && entryType !== null ? "#fff" : "#aaa",
+              fontSize: 14, fontWeight: 700, cursor: value.trim() && vatRegistered !== null && entryType !== null ? "pointer" : "default",
               fontFamily: "inherit", letterSpacing: "0.06em", transition: "all 0.2s"
             }}
           >
@@ -514,6 +535,7 @@ function Dashboard() {
   const { getToken } = useAuth();
   const [bizCode, setBizCode] = useState("");
   const [isVatRegistered, setIsVatRegistered] = useState(null);
+  const [entryType, setEntryType] = useState(null);
   const [receipts, setReceipts] = useState([]);
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
@@ -524,7 +546,7 @@ function Dashboard() {
   const fileRef = useRef();
 
   // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat) => { setBizCode(biz); setIsVatRegistered(vat); }} />;
+  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} />;
 
   const processFiles = async (files) => {
     setGlobalError(null);
