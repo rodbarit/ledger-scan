@@ -229,7 +229,13 @@ async function generatePDF(bizCode, receipts, filename, entryType) {
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(120, 120, 120);
     pdf.text("Confidential — For accounting purposes only", pageW / 2, pageH - 4, { align: "center" });
   }
-  pdf.save(filename);
+  const blob = new Blob([pdf.output("arraybuffer")], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  window.open(url, "_blank");
 }
 
 // Same as generatePDF but returns base64 string for emailing
