@@ -26,10 +26,10 @@ export default async function handler(req, res) {
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.replace("Bearer ", "").trim();
   const session = await verifyClerkToken(token);
-  if (!session) return res.status(401).json({ error: "Unauthorized. Please sign in." });
 
-  const { base64, mediaType } = req.body || {};
+  const { base64, mediaType, guestMode } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
+  if (!session && !guestMode) return res.status(401).json({ error: "Unauthorized. Please sign in." });
 
   const prompt = `You are an accounting assistant that extracts structured data from receipt images for Philippine BIR compliance.
 

@@ -85,10 +85,14 @@ const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 
 // ── API helpers ────────────────────────────────────────────────────────────
 async function extractReceiptData(base64, mediaType, token) {
+  const isGuest = !token;
   const response = await fetch("/api/extract", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-    body: JSON.stringify({ base64, mediaType })
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ base64, mediaType, guestMode: isGuest })
   });
   const json = await response.json();
   if (!response.ok) throw new Error(json.error || "Extraction failed");
@@ -486,10 +490,53 @@ function BizCodeScreen({ onConfirm }) {
   );
 }
 
-// ── Main app (only shown when signed in) ──────────────────────────────────
+// ── Sign-up upsell modal ───────────────────────────────────────────────────
+function SignupModal({ onClose }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 3000,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 16, padding: "40px 36px", maxWidth: 420, width: "100%",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)", textAlign: "center", fontFamily: "'Lato', sans-serif"
+      }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>
+          You've used your 5 free scans
+        </div>
+        <div style={{ fontSize: 14, color: "#666", marginBottom: 28, lineHeight: 1.6 }}>
+          Sign up for free to get <strong>50 scans per day</strong> and unlock CSV &amp; PDF exports.
+        </div>
+        <SignIn
+          appearance={{
+            elements: {
+              rootBox: { width: "100%" },
+              card: { borderRadius: 12, border: "1px solid #e5e2de", boxShadow: "none" },
+              headerTitle: { fontFamily: "'Playfair Display', serif", color: "#1a1a2e" },
+              formButtonPrimary: { background: "#1a1a2e", borderRadius: 6 },
+              footerActionLink: { color: "#2a5298" }
+            }
+          }}
+        />
+        <button onClick={onClose} style={{
+          marginTop: 16, background: "none", border: "none", color: "#aaa",
+          fontSize: 13, cursor: "pointer", textDecoration: "underline", fontFamily: "inherit"
+        }}>Maybe later</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main app ───────────────────────────────────────────────────────────────
 function Dashboard() {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
+  const isGuest = isLoaded && !user;
+  const FREE_LIMIT = 5;
+  const [guestScans, setGuestScans] = useState(() =>
+    parseInt(localStorage.getItem("guestScans") || "0", 10)
+  );
+  const [showSignupModal, setShowSignupModal] = useState(false);
   const [bizCode, setBizCode] = useState("");
   const [receipts, setReceipts] = useState([]);
   const [dragging, setDragging] = useState(false);
@@ -500,19 +547,26 @@ function Dashboard() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const fileRef = useRef();
 
-  // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={setBizCode} />;
+  // Show business code entry screen first (skip for guests)
+  if (!bizCode && !isGuest) return <BizCodeScreen onConfirm={setBizCode} />;
 
   const processFiles = async (files) => {
     setGlobalError(null);
-    const newItems = Array.from(files).map(f => ({
+    let fileArray = Array.from(files);
+    if (isGuest) {
+      const currentScans = parseInt(localStorage.getItem("guestScans") || "0", 10);
+      if (currentScans >= FREE_LIMIT) { setShowSignupModal(true); return; }
+      const remaining = FREE_LIMIT - currentScans;
+      if (fileArray.length > remaining) fileArray = fileArray.slice(0, remaining);
+    }
+    const newItems = fileArray.map(f => ({
       id: Math.random().toString(36).slice(2),
       file: f, preview: URL.createObjectURL(f),
       status: "pending", error: null, data: EMPTY_DATA()
     }));
     setReceipts(prev => [...prev, ...newItems]);
     setExpandedId(newItems[0]?.id ?? null);
-    const token = await getToken() ?? "";
+    const token = isGuest ? "" : (await getToken() ?? "");
     for (const item of newItems) {
       setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "processing" } : r));
       try {
@@ -525,6 +579,12 @@ function Dashboard() {
         const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token);
         setReceipts(prev => prev.map(r => r.id === item.id
           ? { ...r, status: "done", data: { ...EMPTY_DATA(), ...extracted } } : r));
+        if (isGuest) {
+          const newCount = parseInt(localStorage.getItem("guestScans") || "0", 10) + 1;
+          localStorage.setItem("guestScans", String(newCount));
+          setGuestScans(newCount);
+          if (newCount >= FREE_LIMIT) setShowSignupModal(true);
+        }
       } catch (e) {
         if (e.message?.toLowerCase().includes("daily limit")) setGlobalError(e.message);
         setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "error", error: e.message } : r));
@@ -589,6 +649,8 @@ function Dashboard() {
     <div style={{ minHeight: "100vh", background: "#f4f3f0", fontFamily: "'Lato', sans-serif", color: "#1a1a2e" }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 
+      {showSignupModal && <SignupModal onClose={() => setShowSignupModal(false)} />}
+
       {/* Lightbox */}
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{
@@ -650,7 +712,20 @@ function Dashboard() {
             fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !sendingEmail ? "pointer" : "not-allowed",
             letterSpacing: "0.06em", textTransform: "uppercase"
           }}>{sendingEmail ? "⟳ Sending..." : "✉ Email"}</button>
-          <UserMenu />
+          {isGuest ? (
+            <>
+              <span style={{ fontSize: 12, color: "#7eb8f7" }}>
+                {FREE_LIMIT - guestScans} of {FREE_LIMIT} free scans left
+              </span>
+              <button onClick={() => setShowSignupModal(true)} style={{
+                background: "#2a5298", color: "#fff", border: "none", borderRadius: 4,
+                padding: "8px 16px", fontSize: 12, fontFamily: "inherit", fontWeight: 700,
+                cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase"
+              }}>Sign In / Sign Up</button>
+            </>
+          ) : (
+            <UserMenu />
+          )}
         </div>
       </div>
 
@@ -659,12 +734,16 @@ function Dashboard() {
         <span style={{ color: "#888" }}>Field type:</span>
         <TAG color="#2a5298">AI extracted</TAG>
         <TAG color="#b45309">Manual entry</TAG>
-        <button onClick={() => { setBizCode(""); setReceipts([]); }} style={{
-          marginLeft: "auto", background: "none", border: "1px solid #ccc", borderRadius: 4,
-          padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
-        }}>← Change Business Code</button>
-        <span className="subbar-right" style={{ color: "#aaa", fontSize: 11 }}>
-          Signed in as {user?.emailAddresses?.[0]?.emailAddress}
+        {!isGuest && (
+          <button onClick={() => { setBizCode(""); setReceipts([]); }} style={{
+            marginLeft: "auto", background: "none", border: "1px solid #ccc", borderRadius: 4,
+            padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
+          }}>← Change Business Code</button>
+        )}
+        <span className="subbar-right" style={{ color: "#aaa", fontSize: 11, marginLeft: isGuest ? "auto" : 0 }}>
+          {isGuest
+            ? `Guest · ${FREE_LIMIT - guestScans} of ${FREE_LIMIT} free scans remaining`
+            : `Signed in as ${user?.emailAddresses?.[0]?.emailAddress}`}
         </span>
       </div>
 
@@ -887,12 +966,7 @@ function Dashboard() {
   );
 }
 
-// ── Root: show login or dashboard ──────────────────────────────────────────
+// ── Root ────────────────────────────────────────────────────────────────────
 export default function App() {
-  return (
-    <>
-      <SignedOut><LoginScreen /></SignedOut>
-      <SignedIn><Dashboard /></SignedIn>
-    </>
-  );
+  return <Dashboard />;
 }
