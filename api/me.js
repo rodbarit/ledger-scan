@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     if (t === "pro") {
       scansUsed = total; scansLimit = null; scansLeft = null;
     } else if (t === "basic") {
-      scansUsed = monthly; scansLimit = 500; scansLeft = Math.max(0, 500 - monthly);
+      scansUsed = monthly; scansLimit = 200; scansLeft = Math.max(0, 200 - monthly);
     } else {
       scansUsed = total; scansLimit = 100; scansLeft = Math.max(0, 100 - total);
     }

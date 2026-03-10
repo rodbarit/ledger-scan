@@ -616,7 +616,7 @@ function Dashboard() {
   const isAdmin = isSignedIn && user?.id === import.meta.env.VITE_ADMIN_USER_ID;
 
   const TIERS = ["free", "basic", "pro"];
-  const TIER_LABELS = { free: "Free", basic: "Basic · ₱299", pro: "Pro · ₱799" };
+  const TIER_LABELS = { free: "Free", basic: "Basic · ₱499", pro: "Pro · ₱999" };
   const TIER_STYLES = {
     free:  { background: "#f3f4f6", color: "#6b7280" },
     basic: { background: "#eff6ff", color: "#2a5298" },
@@ -865,8 +865,8 @@ function Dashboard() {
                     {userStats.tier === "pro"
                       ? <span style={{ color: "#fbbf24", fontWeight: 700 }}>Pro · Unlimited</span>
                       : userStats.tier === "basic"
-                        ? <span style={{ color: userStats.scansLeft <= 50 ? "#f87171" : "#7eb8f7" }}>
-                            <strong style={{ color: userStats.scansLeft <= 50 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> scans left this month
+                        ? <span style={{ color: userStats.scansLeft <= 20 ? "#f87171" : "#7eb8f7" }}>
+                            <strong style={{ color: userStats.scansLeft <= 20 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> scans left this month
                           </span>
                         : <span style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#7eb8f7" }}>
                             <strong style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> free scans left
@@ -1223,8 +1223,8 @@ function Dashboard() {
                               {settingTier[u.userId] ? "..." : TIER_LABELS[u.tier]}
                             </button>
                           </td>
-                          <td style={{ padding: "9px 14px", fontWeight: 700, color: (u.tier === "free" && Number(u.scans) >= 100) || (u.tier === "basic" && u.scansThisMonth >= 500) ? "#c0392b" : "#1a1a2e" }}>
-                            {u.tier === "basic" ? `${u.scansThisMonth} / 500 mo` : u.tier === "pro" ? `${Number(u.scans).toLocaleString()} ∞` : `${Number(u.scans).toLocaleString()} / 100`}
+                          <td style={{ padding: "9px 14px", fontWeight: 700, color: (u.tier === "free" && Number(u.scans) >= 100) || (u.tier === "basic" && u.scansThisMonth >= 200) ? "#c0392b" : "#1a1a2e" }}>
+                            {u.tier === "basic" ? `${u.scansThisMonth} / 200 mo` : u.tier === "pro" ? `${Number(u.scans).toLocaleString()} ∞` : `${Number(u.scans).toLocaleString()} / 100`}
                           </td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.scansThisMonth}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.input.toLocaleString()}</td>

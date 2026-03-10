@@ -39,14 +39,14 @@ export default async function handler(req, res) {
       } else if (tier === "basic") {
         const month = new Date().toISOString().slice(0, 7);
         const monthlyScans = (await kv.get(`user:${userId}:scans:${month}`)) || 0;
-        if (monthlyScans >= 500) {
-          return res.status(429).json({ error: "Monthly limit of 500 scans reached. Resets on the 1st of next month." });
+        if (monthlyScans >= 200) {
+          return res.status(429).json({ error: "Monthly limit of 200 scans reached. Resets on the 1st of next month." });
         }
       } else {
         // free tier — 100 lifetime
         const totalScans = (await kv.get(`user:${userId}:scans`)) || 0;
         if (totalScans >= 100) {
-          return res.status(429).json({ error: "You've used all 100 free scans. Upgrade to Basic (PHP 299/mo) or Pro (PHP 799/mo) to continue." });
+          return res.status(429).json({ error: "You've used all 100 free scans. Upgrade to Basic (₱499/mo) or Pro (₱999/mo) to continue." });
         }
       }
     } catch (e) {
