@@ -28,6 +28,20 @@ const SALES_FIELDS = [
   { key: "customerCode",   label: "Client Code",       ai: false },
 ];
 
+// Convert extracted text to title case e.g. "HAILCO PIPEWORKS" → "Hailco Pipeworks"
+function toTitleCase(str) {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Apply title case to relevant text fields from AI extraction
+function normalizeTitleCase(data) {
+  const textFields = ["supplierName", "expenseType", "customerName", "salesType"];
+  const result = { ...data };
+  textFields.forEach(k => { if (result[k]) result[k] = toTitleCase(result[k]); });
+  return result;
+}
+
 // Parse a PHP amount string to a number e.g. "PHP 1,234.56" → 1234.56
 function parseAmount(str) {
   if (!str) return 0;
@@ -647,7 +661,8 @@ function Dashboard() {
           reader.onerror = rej;
           reader.readAsDataURL(item.file);
         });
-        const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered, entryType);
+        const raw = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered, entryType);
+        const extracted = normalizeTitleCase(raw);
         if (!isSignedIn) {
           const next = freeScans + 1;
           localStorage.setItem("freeScans", next);
