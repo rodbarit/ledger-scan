@@ -29,6 +29,24 @@ export default async function handler(req, res) {
   const session = token ? await verifyClerkToken(token) : null;
   // Guests (no token) allowed — free scan limit enforced client-side
 
+  // Check monthly scan limit for signed-in users (premium users are unlimited)
+  const MONTHLY_LIMIT = 50;
+  if (session) {
+    const userId = session.sub;
+    try {
+      const isPremium = await kv.get(`user:${userId}:premium`);
+      if (!isPremium) {
+        const month = new Date().toISOString().slice(0, 7);
+        const monthlyScans = (await kv.get(`user:${userId}:scans:${month}`)) || 0;
+        if (monthlyScans >= MONTHLY_LIMIT) {
+          return res.status(429).json({ error: `Monthly limit reached. You've used all ${MONTHLY_LIMIT} scans for this month. Resets next month.` });
+        }
+      }
+    } catch (e) {
+      console.error("KV limit check error:", e);
+    }
+  }
+
   const { base64, mediaType, isVatRegistered, entryType } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
 
@@ -160,13 +178,17 @@ ${vatRules}`;
       const costMicro = Math.round(costUSD * 1_000_000); // microdollars
       const costPhpCentavos = Math.round(costUSD * usdToPhp * 100); // centavos
       try {
-        await Promise.all([
-          kv.incr(`user:${userId}:scans`),
-          kv.incrby(`user:${userId}:tokens:input`, inputTokens),
-          kv.incrby(`user:${userId}:tokens:output`, outputTokens),
-          kv.incrby(`user:${userId}:cost:micro`, costMicro),
-          kv.incrby(`user:${userId}:cost:php_centavos`, costPhpCentavos),
-        ]);
+        const month = new Date().toISOString().slice(0, 7);
+        const monthlyKey = `user:${userId}:scans:${month}`;
+        const pipe = kv.pipeline();
+        pipe.incr(`user:${userId}:scans`);
+        pipe.incrby(`user:${userId}:tokens:input`, inputTokens);
+        pipe.incrby(`user:${userId}:tokens:output`, outputTokens);
+        pipe.incrby(`user:${userId}:cost:micro`, costMicro);
+        pipe.incrby(`user:${userId}:cost:php_centavos`, costPhpCentavos);
+        pipe.incr(monthlyKey);
+        pipe.expire(monthlyKey, 60 * 60 * 24 * 35); // auto-expire after 35 days
+        await pipe.exec();
       } catch (e) {
         console.error("KV tracking error:", e);
       }

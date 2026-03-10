@@ -1138,7 +1138,7 @@ function Dashboard() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, whiteSpace: "nowrap" }}>
                     <thead>
                       <tr style={{ background: "#f8f7f5" }}>
-                        {["User ID", "Scans", "Input Tokens", "Output Tokens", "Total Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
+                        {["User ID", "Plan", "This Month", "Total Scans", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
                           <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
                         ))}
                       </tr>
@@ -1147,10 +1147,15 @@ function Dashboard() {
                       {adminData.users.map((u, i) => (
                         <tr key={u.userId} style={{ borderBottom: "1px solid #f0ece8", background: i % 2 === 0 ? "#fff" : "#fafaf9" }}>
                           <td style={{ padding: "9px 14px", color: "#666", fontFamily: "monospace", fontSize: 11 }}>{u.userId}</td>
-                          <td style={{ padding: "9px 14px", fontWeight: 700, color: "#1a1a2e" }}>{u.scans}</td>
+                          <td style={{ padding: "9px 14px" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: u.premium ? "#fef3c7" : "#f3f4f6", color: u.premium ? "#b45309" : "#6b7280" }}>
+                              {u.premium ? "Premium" : "Free"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "9px 14px", fontWeight: 700, color: u.scansThisMonth >= 50 && !u.premium ? "#c0392b" : "#1a1a2e" }}>{u.scansThisMonth}{!u.premium && ` / 50`}</td>
+                          <td style={{ padding: "9px 14px", color: "#555" }}>{Number(u.scans).toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.input.toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.output.toLocaleString()}</td>
-                          <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.total.toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#15803d", fontWeight: 600 }}>${u.cost.usd}</td>
                           <td style={{ padding: "9px 14px", color: "#b45309", fontWeight: 600 }}>₱{u.cost.php}</td>
                         </tr>
