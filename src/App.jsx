@@ -18,12 +18,12 @@ const FIELDS = [
 const SALES_FIELDS = [
   { key: "accountDate",    label: "Account Date",      ai: true  },
   { key: "invoiceReceipt", label: "Invoice / Receipt", ai: true  },
-  { key: "customerName",   label: "Customer Name",     ai: true  },
+  { key: "customerName",   label: "Client Name",       ai: true  },
   { key: "salesType",      label: "Sales Type",        ai: true  },
   { key: "totalBilling",   label: "Total Billing",     ai: true  },
   { key: "vatableSales",   label: "VATable Sales",     ai: true  },
   { key: "vat",            label: "VAT",               ai: true  },
-  { key: "customerCode",   label: "Customer Code",     ai: false },
+  { key: "customerCode",   label: "Client Code",       ai: false },
 ];
 
 // Parse a PHP amount string to a number e.g. "PHP 1,234.56" → 1234.56
@@ -67,9 +67,9 @@ function buildFilename(bizCode, ext) {
 
 function toSalesCSV(bizCode, rows, isVatRegistered) {
   const header = [
-    "Account Date", "Invoice / Receipt", "Customer Name", "Sales Type",
+    "Account Date", "Invoice / Receipt", "Client Name", "Sales Type",
     "Total Billing", "VATable Sales", "VAT",
-    "Customer Code", "Reference Code", "Business Code", "PDF Page"
+    "Client Code", "Reference Code", "Business Code", "PDF Page"
   ];
   const lines = [
     header.join(","),
@@ -79,7 +79,7 @@ function toSalesCSV(bizCode, rows, isVatRegistered) {
       const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
       const q = v => `"${(v || "").replace(/"/g, '""')}"`;
       return [
-        q(r.data.accountDate), q(r.data.invoiceReceipt), q(r.data.customerName), q(r.data.salesType),
+        q(r.data.accountDate), q(r.data.invoiceReceipt), q(r.data.customerName  ), q(r.data.salesType),
         q(r.data.totalBilling), q(isVatRegistered ? r.data.vatableSales : ""), q(isVatRegistered ? r.data.vat : ""),
         q(r.data.customerCode), q(refCode), q(bizCode), q(pageRef)
       ].join(",");
@@ -192,7 +192,7 @@ async function generatePDF(bizCode, receipts, filename, entryType) {
     pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(0, 0, 0);
     let hx = margin;
     pdf.text("REFERENCE CODE",                    hx, tableY + 5); hx += c1;
-    pdf.text(entryType === "sales" ? "CUSTOMER" : "SUPPLIER", hx, tableY + 5); hx += c2;
+    pdf.text(entryType === "sales" ? "CLIENT" : "SUPPLIER", hx, tableY + 5); hx += c2;
     pdf.text(entryType === "sales" ? "SALES TYPE" : "CATEGORY", hx, tableY + 5); hx += c3;
     pdf.text(entryType === "sales" ? "TOTAL BILLING" : "TOTAL", hx, tableY + 5);
     pdf.setLineWidth(0.2);

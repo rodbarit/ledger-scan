@@ -61,7 +61,7 @@ Analyze the receipt/invoice and return ONLY a valid JSON object with these exact
   - If only 2 digits are written for year (e.g. "25"), assume 20XX → 2025
 
 - "invoiceReceipt": the invoice or receipt number/reference (OR number) shown on the document
-- "customerName": the name of the customer or buyer shown on the receipt/invoice. If not shown, use ""
+- "customerName": the name of the client or buyer shown on the receipt/invoice. If not shown, use ""
 - "salesType": the category of what was sold (e.g. "Merchandise", "Services", "Food & Beverage", "Construction Materials", etc.)
 - "totalBilling": see rules below
 - "vatableSales": see rules below
