@@ -143,7 +143,7 @@ async function generatePDF(bizCode, receipts, filename, entryType) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = 210, pageH = 297, margin = 10, gap = 4;
   const cellW = (pageW - margin * 2 - gap) / 2;
-  const footerRowH = 7, colHeaderH = 8;
+  const footerRowH = 13, colHeaderH = 8;
   const pages = [];
   for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
 
@@ -208,11 +208,13 @@ async function generatePDF(bizCode, receipts, filename, entryType) {
       const total    = entryType === "sales" ? (r.data.totalBilling || "—") : (r.data.totalAmountDue || computeTotalExpense(r.data) || "—");
 
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0, 0, 0);
+      const supplierLines = pdf.splitTextToSize(supplier, c2 - 2).slice(0, 2);
+      const categoryLines = pdf.splitTextToSize(category, c3 - 2).slice(0, 2);
       let rx = margin;
-      pdf.text(tr(refCode,       30), rx, rowY + 4.5); rx += c1;
-      pdf.text(tr(supplier,      30), rx, rowY + 4.5); rx += c2;
-      pdf.text(tr(category,      20), rx, rowY + 4.5); rx += c3;
-      pdf.text(tr(nc(total),     18), rx, rowY + 4.5);
+      pdf.text(tr(refCode, 30),   rx, rowY + 4); rx += c1;
+      pdf.text(supplierLines,     rx, rowY + 4); rx += c2;
+      pdf.text(categoryLines,     rx, rowY + 4); rx += c3;
+      pdf.text(tr(nc(total), 18), rx, rowY + 4);
 
       if (i < group.length - 1) {
         pdf.setLineWidth(0.1); pdf.setDrawColor(180, 180, 180);
@@ -244,7 +246,7 @@ async function generatePDFBase64(bizCode, receipts, entryType) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = 210, pageH = 297, margin = 10, gap = 4;
   const cellW = (pageW - margin * 2 - gap) / 2;
-  const footerRowH = 7, colHeaderH = 8;
+  const footerRowH = 13, colHeaderH = 8;
   const pages = [];
   for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
   const c1 = 55, c2 = 58, c3 = 38;
@@ -281,7 +283,7 @@ async function generatePDFBase64(bizCode, receipts, entryType) {
     pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(0,0,0);
     let hx = margin;
     pdf.text("REFERENCE CODE", hx, tableY+5); hx += c1;
-    pdf.text(entryType === "sales" ? "CUSTOMER" : "SUPPLIER", hx, tableY+5); hx += c2;
+    pdf.text(entryType === "sales" ? "CLIENT" : "SUPPLIER", hx, tableY+5); hx += c2;
     pdf.text(entryType === "sales" ? "SALES TYPE" : "CATEGORY", hx, tableY+5); hx += c3;
     pdf.text(entryType === "sales" ? "TOTAL BILLING" : "TOTAL", hx, tableY+5);
     pdf.setLineWidth(0.2);
@@ -294,11 +296,13 @@ async function generatePDFBase64(bizCode, receipts, entryType) {
       const category = entryType === "sales" ? (r.data.salesType || "—") : (r.data.expenseType || "—");
       const total = entryType === "sales" ? (r.data.totalBilling || "—") : (r.data.totalAmountDue || computeTotalExpense(r.data) || "—");
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0,0,0);
+      const supplierLines = pdf.splitTextToSize(supplier, c2 - 2).slice(0, 2);
+      const categoryLines = pdf.splitTextToSize(category, c3 - 2).slice(0, 2);
       let rx = margin;
-      pdf.text(tr(refCode,      30), rx, rowY+4.5); rx += c1;
-      pdf.text(tr(supplier,     30), rx, rowY+4.5); rx += c2;
-      pdf.text(tr(category,     20), rx, rowY+4.5); rx += c3;
-      pdf.text(tr(nc(total),    18), rx, rowY+4.5);
+      pdf.text(tr(refCode, 30),   rx, rowY+4); rx += c1;
+      pdf.text(supplierLines,     rx, rowY+4); rx += c2;
+      pdf.text(categoryLines,     rx, rowY+4); rx += c3;
+      pdf.text(tr(nc(total), 18), rx, rowY+4);
       if (i < group.length - 1) { pdf.setLineWidth(0.1); pdf.setDrawColor(180,180,180); pdf.line(margin, rowY+footerRowH, pageW-margin, rowY+footerRowH); }
     }
     pdf.setLineWidth(0.3); pdf.setDrawColor(0);
