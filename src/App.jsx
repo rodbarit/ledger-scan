@@ -149,6 +149,7 @@ async function generatePDF(bizCode, receipts, filename, entryType) {
 
   const c1 = 55, c2 = 58, c3 = 38;
   const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
+  const nc = s => (s || "").replace(/\u20b1/g, "PHP ");
 
   for (let p = 0; p < pages.length; p++) {
     if (p > 0) pdf.addPage();
@@ -208,10 +209,10 @@ async function generatePDF(bizCode, receipts, filename, entryType) {
 
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0, 0, 0);
       let rx = margin;
-      pdf.text(tr(refCode,  30), rx, rowY + 4.5); rx += c1;
-      pdf.text(tr(supplier, 30), rx, rowY + 4.5); rx += c2;
-      pdf.text(tr(category, 20), rx, rowY + 4.5); rx += c3;
-      pdf.text(tr(total,    18), rx, rowY + 4.5);
+      pdf.text(tr(refCode,       30), rx, rowY + 4.5); rx += c1;
+      pdf.text(tr(supplier,      30), rx, rowY + 4.5); rx += c2;
+      pdf.text(tr(category,      20), rx, rowY + 4.5); rx += c3;
+      pdf.text(tr(nc(total),     18), rx, rowY + 4.5);
 
       if (i < group.length - 1) {
         pdf.setLineWidth(0.1); pdf.setDrawColor(180, 180, 180);
@@ -248,6 +249,7 @@ async function generatePDFBase64(bizCode, receipts, entryType) {
   for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
   const c1 = 55, c2 = 58, c3 = 38;
   const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
+  const nc = s => (s || "").replace(/\u20b1/g, "PHP ");
   for (let p = 0; p < pages.length; p++) {
     if (p > 0) pdf.addPage();
     const group = pages[p];
@@ -293,10 +295,10 @@ async function generatePDFBase64(bizCode, receipts, entryType) {
       const total = entryType === "sales" ? (r.data.totalBilling || "—") : (r.data.totalAmountDue || computeTotalExpense(r.data) || "—");
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0,0,0);
       let rx = margin;
-      pdf.text(tr(refCode,30), rx, rowY+4.5); rx += c1;
-      pdf.text(tr(supplier,30), rx, rowY+4.5); rx += c2;
-      pdf.text(tr(category,20), rx, rowY+4.5); rx += c3;
-      pdf.text(tr(total,18), rx, rowY+4.5);
+      pdf.text(tr(refCode,      30), rx, rowY+4.5); rx += c1;
+      pdf.text(tr(supplier,     30), rx, rowY+4.5); rx += c2;
+      pdf.text(tr(category,     20), rx, rowY+4.5); rx += c3;
+      pdf.text(tr(nc(total),    18), rx, rowY+4.5);
       if (i < group.length - 1) { pdf.setLineWidth(0.1); pdf.setDrawColor(180,180,180); pdf.line(margin, rowY+footerRowH, pageW-margin, rowY+footerRowH); }
     }
     pdf.setLineWidth(0.3); pdf.setDrawColor(0);
