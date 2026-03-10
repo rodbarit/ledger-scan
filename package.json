@@ -8,10 +8,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "@clerk/clerk-react": "^5.0.0",
-    "nodemailer": "^6.9.0"
+    "@vercel/kv": "^3.0.0",
+    "nodemailer": "^6.9.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

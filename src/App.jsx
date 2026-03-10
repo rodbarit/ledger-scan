@@ -1,7 +1,9 @@
 import { useState, useRef, useCallback } from "react";
 import {
-  SignedIn, SignedOut, SignIn, useUser, useClerk, useAuth
+  SignedIn, SignedOut, SignIn, useUser, useClerk, useAuth, SignInButton
 } from "@clerk/clerk-react";
+
+const FREE_SCAN_LIMIT = 5;
 
 // ── Field definitions ──────────────────────────────────────────────────────
 const FIELDS = [
@@ -565,19 +567,19 @@ function BizCodeScreen({ onConfirm }) {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
-          Signed in as {user?.emailAddresses?.[0]?.emailAddress} ·{" "}
-          <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>
-            Sign out
-          </button>
+          {user
+            ? <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>
+            : <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign in for unlimited scans</button></SignInButton>
+          }
         </div>
       </div>
     </div>
   );
 }
 
-// ── Main app (only shown when signed in) ──────────────────────────────────
+// ── Main app ───────────────────────────────────────────────────────────────
 function Dashboard() {
-  const { user } = useUser();
+  const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const [bizCode, setBizCode] = useState("");
   const [isVatRegistered, setIsVatRegistered] = useState(null);
@@ -586,15 +588,23 @@ function Dashboard() {
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
-  const [lightbox, setLightbox] = useState(null); // preview URL
+  const [lightbox, setLightbox] = useState(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
+  const [freeScans, setFreeScans] = useState(() => parseInt(localStorage.getItem("freeScans") || "0"));
   const fileRef = useRef();
+
+  const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
 
   // Show business code entry screen first
   if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} />;
 
   const processFiles = async (files) => {
+    if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
+      setShowSignUp(true);
+      return;
+    }
     setGlobalError(null);
     const newItems = Array.from(files).map(f => ({
       id: Math.random().toString(36).slice(2),
@@ -605,6 +615,11 @@ function Dashboard() {
     setExpandedId(newItems[0]?.id ?? null);
     const token = await getToken() ?? "";
     for (const item of newItems) {
+      if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
+        setShowSignUp(true);
+        setReceipts(prev => prev.filter(r => r.id !== item.id));
+        break;
+      }
       setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "processing" } : r));
       try {
         const base64 = await new Promise((res, rej) => {
@@ -614,6 +629,11 @@ function Dashboard() {
           reader.readAsDataURL(item.file);
         });
         const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered, entryType);
+        if (!isSignedIn) {
+          const next = freeScans + 1;
+          localStorage.setItem("freeScans", next);
+          setFreeScans(next);
+        }
         setReceipts(prev => prev.map(r => r.id === item.id
           ? { ...r, status: "done", data: { ...EMPTY_DATA(), ...extracted } } : r));
       } catch (e) {
@@ -750,7 +770,19 @@ function Dashboard() {
             fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !sendingEmail ? "pointer" : "not-allowed",
             letterSpacing: "0.06em", textTransform: "uppercase"
           }}>{sendingEmail ? "⟳ Sending..." : "✉ Email"}</button>
-          <UserMenu />
+          {isSignedIn
+            ? <UserMenu />
+            : <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 11, color: freeScansLeft <= 1 ? "#f87171" : "#7eb8f7" }}>
+                  {freeScansLeft} free scan{freeScansLeft !== 1 ? "s" : ""} left
+                </span>
+                <SignInButton mode="modal">
+                  <button style={{ background: "#2a5298", color: "#fff", border: "none", borderRadius: 4, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                    Sign In
+                  </button>
+                </SignInButton>
+              </div>
+          }
         </div>
       </div>
 
@@ -764,7 +796,7 @@ function Dashboard() {
           padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
         }}>← Change Business Code</button>
         <span className="subbar-right" style={{ color: "#aaa", fontSize: 11 }}>
-          Signed in as {user?.emailAddresses?.[0]?.emailAddress}
+          {isSignedIn ? `Signed in as ${user?.emailAddresses?.[0]?.emailAddress}` : "Guest session"}
         </span>
       </div>
 
@@ -1031,16 +1063,34 @@ function Dashboard() {
           .subbar-right { display: none !important; }
         }
       `}</style>
+
+      {/* Sign-up modal for guests who hit the free limit */}
+      {showSignUp && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>
+              You've used your {FREE_SCAN_LIMIT} free scans
+            </div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 28, lineHeight: 1.6 }}>
+              Sign up for free to keep scanning receipts with no interruptions.
+            </div>
+            <SignInButton mode="modal">
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 12 }}>
+                Sign Up — It's Free
+              </button>
+            </SignInButton>
+            <button onClick={() => setShowSignUp(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Root: show login or dashboard ──────────────────────────────────────────
+// ── Root ────────────────────────────────────────────────────────────────────
 export default function App() {
-  return (
-    <>
-      <SignedOut><LoginScreen /></SignedOut>
-      <SignedIn><Dashboard /></SignedIn>
-    </>
-  );
+  return <Dashboard />;
 }

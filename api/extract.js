@@ -1,5 +1,6 @@
 // api/extract.js — LedgerScan v2
-// Required env vars: ANTHROPIC_API_KEY, CLERK_SECRET_KEY
+// Required env vars: ANTHROPIC_API_KEY, CLERK_SECRET_KEY, KV_REST_API_URL, KV_REST_API_TOKEN
+import { kv } from "@vercel/kv";
 
 async function verifyClerkToken(token) {
   if (!token) return null;
@@ -25,8 +26,8 @@ export default async function handler(req, res) {
 
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.replace("Bearer ", "").trim();
-  const session = await verifyClerkToken(token);
-  if (!session) return res.status(401).json({ error: "Unauthorized. Please sign in." });
+  const session = token ? await verifyClerkToken(token) : null;
+  // Guests (no token) allowed — free scan limit enforced client-side
 
   const { base64, mediaType, isVatRegistered, entryType } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
@@ -148,6 +149,22 @@ ${vatRules}`;
     } catch {}
 
     if (!extracted) return res.status(422).json({ error: "Could not parse receipt data from image." });
+
+    // Track usage for signed-in users
+    if (session) {
+      const userId = session.sub;
+      const inputTokens = anthropicData.usage?.input_tokens || 0;
+      const outputTokens = anthropicData.usage?.output_tokens || 0;
+      try {
+        await Promise.all([
+          kv.incr(`user:${userId}:scans`),
+          kv.incrby(`user:${userId}:tokens:input`, inputTokens),
+          kv.incrby(`user:${userId}:tokens:output`, outputTokens),
+        ]);
+      } catch (e) {
+        console.error("KV tracking error:", e);
+      }
+    }
 
     return res.status(200).json({ data: extracted });
   } catch (err) {
