@@ -147,7 +147,7 @@ async function generatePDF(bizCode, receipts, filename) {
   const pages = [];
   for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
 
-  const c1 = 60, c2 = 38, c3 = 50, c4 = pageW - margin * 2 - c1 - c2 - c3;
+  const c1 = 55, c2 = 58, c3 = 38;
   const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
 
   for (let p = 0; p < pages.length; p++) {
@@ -208,9 +208,9 @@ async function generatePDF(bizCode, receipts, filename) {
 
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0, 0, 0);
       let rx = margin;
-      pdf.text(tr(refCode,  32), rx, rowY + 4.5); rx += c1;
-      pdf.text(tr(supplier, 20), rx, rowY + 4.5); rx += c2;
-      pdf.text(tr(category, 25), rx, rowY + 4.5); rx += c3;
+      pdf.text(tr(refCode,  30), rx, rowY + 4.5); rx += c1;
+      pdf.text(tr(supplier, 30), rx, rowY + 4.5); rx += c2;
+      pdf.text(tr(category, 20), rx, rowY + 4.5); rx += c3;
       pdf.text(tr(total,    18), rx, rowY + 4.5);
 
       if (i < group.length - 1) {
@@ -246,7 +246,7 @@ async function generatePDFBase64(bizCode, receipts) {
   const footerRowH = 7, colHeaderH = 8;
   const pages = [];
   for (let i = 0; i < receipts.length; i += 2) pages.push(receipts.slice(i, i + 2));
-  const c1 = 60, c2 = 38, c3 = 50;
+  const c1 = 55, c2 = 58, c3 = 38;
   const tr = (s, n) => s && s.length > n ? s.slice(0, n) + "…" : (s || "—");
   for (let p = 0; p < pages.length; p++) {
     if (p > 0) pdf.addPage();
@@ -293,9 +293,9 @@ async function generatePDFBase64(bizCode, receipts) {
       const total = r.data.totalAmountDue || computeTotalExpense(r.data) || "—";
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0,0,0);
       let rx = margin;
-      pdf.text(tr(refCode,32), rx, rowY+4.5); rx += c1;
-      pdf.text(tr(supplier,20), rx, rowY+4.5); rx += c2;
-      pdf.text(tr(category,25), rx, rowY+4.5); rx += c3;
+      pdf.text(tr(refCode,30), rx, rowY+4.5); rx += c1;
+      pdf.text(tr(supplier,30), rx, rowY+4.5); rx += c2;
+      pdf.text(tr(category,20), rx, rowY+4.5); rx += c3;
       pdf.text(tr(total,18), rx, rowY+4.5);
       if (i < group.length - 1) { pdf.setLineWidth(0.1); pdf.setDrawColor(180,180,180); pdf.line(margin, rowY+footerRowH, pageW-margin, rowY+footerRowH); }
     }
@@ -700,6 +700,14 @@ function Dashboard() {
           <div className="topbar-brand" style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
           <div style={{ fontSize: 13, color: "#7eb8f7", fontWeight: 700, letterSpacing: "0.06em" }}>{bizCode}</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: entryType === "sales" ? "#166534" : "#1e3a5f", color: entryType === "sales" ? "#86efac" : "#7eb8f7", border: `1px solid ${entryType === "sales" ? "#16a34a44" : "#2a529844"}` }}>
+              {entryType === "sales" ? "Sales" : "Expenses"}
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: isVatRegistered ? "#3b1f00" : "#2d1f00", color: isVatRegistered ? "#fbbf24" : "#f87171", border: `1px solid ${isVatRegistered ? "#d9770644" : "#ef444444"}` }}>
+              {isVatRegistered ? "VAT" : "Non-VAT"}
+            </span>
+          </div>
         </div>
         <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {processingCount > 0 && (
