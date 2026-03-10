@@ -129,7 +129,7 @@ async function extractReceiptData(base64, mediaType, token, isVatRegistered, ent
   return json.data;
 }
 
-async function generatePDF(bizCode, receipts, filename) {
+async function generatePDF(bizCode, receipts, filename, entryType) {
   if (!window.jspdf) {
     await new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -190,10 +190,10 @@ async function generatePDF(bizCode, receipts, filename) {
     // Column headers
     pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(0, 0, 0);
     let hx = margin;
-    pdf.text("REFERENCE CODE", hx, tableY + 5); hx += c1;
-    pdf.text("SUPPLIER",       hx, tableY + 5); hx += c2;
-    pdf.text("CATEGORY",       hx, tableY + 5); hx += c3;
-    pdf.text("TOTAL",          hx, tableY + 5);
+    pdf.text("REFERENCE CODE",                    hx, tableY + 5); hx += c1;
+    pdf.text(entryType === "sales" ? "CUSTOMER" : "SUPPLIER", hx, tableY + 5); hx += c2;
+    pdf.text(entryType === "sales" ? "SALES TYPE" : "CATEGORY", hx, tableY + 5); hx += c3;
+    pdf.text(entryType === "sales" ? "TOTAL BILLING" : "TOTAL", hx, tableY + 5);
     pdf.setLineWidth(0.2);
     pdf.line(margin, tableY + colHeaderH - 1, pageW - margin, tableY + colHeaderH - 1);
 
@@ -202,9 +202,9 @@ async function generatePDF(bizCode, receipts, filename) {
       const r = group[i];
       const rowY = tableY + colHeaderH + i * footerRowH;
       const refCode  = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
-      const supplier = r.data.supplierName || r.data.invoiceReceipt || "—";
-      const category = r.data.expenseType || "—";
-      const total    = r.data.totalAmountDue || computeTotalExpense(r.data) || "—";
+      const supplier = entryType === "sales" ? (r.data.customerName || "—") : (r.data.supplierName || r.data.invoiceReceipt || "—");
+      const category = entryType === "sales" ? (r.data.salesType || "—") : (r.data.expenseType || "—");
+      const total    = entryType === "sales" ? (r.data.totalBilling || "—") : (r.data.totalAmountDue || computeTotalExpense(r.data) || "—");
 
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0, 0, 0);
       let rx = margin;
@@ -230,7 +230,7 @@ async function generatePDF(bizCode, receipts, filename) {
 }
 
 // Same as generatePDF but returns base64 string for emailing
-async function generatePDFBase64(bizCode, receipts) {
+async function generatePDFBase64(bizCode, receipts, entryType) {
   if (!window.jspdf) {
     await new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -279,18 +279,18 @@ async function generatePDFBase64(bizCode, receipts) {
     pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setTextColor(0,0,0);
     let hx = margin;
     pdf.text("REFERENCE CODE", hx, tableY+5); hx += c1;
-    pdf.text("SUPPLIER", hx, tableY+5); hx += c2;
-    pdf.text("CATEGORY", hx, tableY+5); hx += c3;
-    pdf.text("TOTAL", hx, tableY+5);
+    pdf.text(entryType === "sales" ? "CUSTOMER" : "SUPPLIER", hx, tableY+5); hx += c2;
+    pdf.text(entryType === "sales" ? "SALES TYPE" : "CATEGORY", hx, tableY+5); hx += c3;
+    pdf.text(entryType === "sales" ? "TOTAL BILLING" : "TOTAL", hx, tableY+5);
     pdf.setLineWidth(0.2);
     pdf.line(margin, tableY+colHeaderH-1, pageW-margin, tableY+colHeaderH-1);
     for (let i = 0; i < group.length; i++) {
       const r = group[i];
       const rowY = tableY + colHeaderH + i * footerRowH;
       const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
-      const supplier = r.data.supplierName || "—";
-      const category = r.data.expenseType || "—";
-      const total = r.data.totalAmountDue || computeTotalExpense(r.data) || "—";
+      const supplier = entryType === "sales" ? (r.data.customerName || "—") : (r.data.supplierName || "—");
+      const category = entryType === "sales" ? (r.data.salesType || "—") : (r.data.expenseType || "—");
+      const total = entryType === "sales" ? (r.data.totalBilling || "—") : (r.data.totalAmountDue || computeTotalExpense(r.data) || "—");
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(0,0,0);
       let rx = margin;
       pdf.text(tr(refCode,30), rx, rowY+4.5); rx += c1;
@@ -633,7 +633,7 @@ function Dashboard() {
   const downloadPDF = async () => {
     if (!doneCount) return;
     setGeneratingPDF(true);
-    try { await generatePDF(bizCode, done, buildFilename(bizCode, "pdf")); }
+    try { await generatePDF(bizCode, done, buildFilename(bizCode, "pdf"), entryType); }
     catch (e) { setGlobalError("PDF generation failed. Please try again."); }
     finally { setGeneratingPDF(false); }
   };
@@ -643,7 +643,7 @@ function Dashboard() {
     setSendingEmail(true);
     try {
       // Generate PDF as base64
-      const pdfBase64 = await generatePDFBase64(bizCode, done);
+      const pdfBase64 = await generatePDFBase64(bizCode, done, entryType);
       const csvContent = toCSV(bizCode, done);
       const csvBase64 = btoa(unescape(encodeURIComponent(csvContent)));
       const filename = buildFilename(bizCode, "");
