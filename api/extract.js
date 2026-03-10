@@ -29,16 +29,24 @@ export default async function handler(req, res) {
   const session = token ? await verifyClerkToken(token) : null;
   // Guests (no token) allowed — free scan limit enforced client-side
 
-  // Check monthly scan limit for signed-in users (premium users are unlimited)
-  const FREE_SCAN_LIMIT = 100;
+  // Tier-based scan limits: free = 100 lifetime, basic = 500/month, pro = unlimited
   if (session) {
     const userId = session.sub;
     try {
-      const isPremium = await kv.get(`user:${userId}:premium`);
-      if (!isPremium) {
+      const tier = await kv.get(`user:${userId}:tier`);
+      if (tier === "pro") {
+        // unlimited — no check
+      } else if (tier === "basic") {
+        const month = new Date().toISOString().slice(0, 7);
+        const monthlyScans = (await kv.get(`user:${userId}:scans:${month}`)) || 0;
+        if (monthlyScans >= 500) {
+          return res.status(429).json({ error: "Monthly limit of 500 scans reached. Resets on the 1st of next month." });
+        }
+      } else {
+        // free tier — 100 lifetime
         const totalScans = (await kv.get(`user:${userId}:scans`)) || 0;
-        if (totalScans >= FREE_SCAN_LIMIT) {
-          return res.status(429).json({ error: `You've used all ${FREE_SCAN_LIMIT} free scans. Please contact us to upgrade to premium for unlimited scans.` });
+        if (totalScans >= 100) {
+          return res.status(429).json({ error: "You've used all 100 free scans. Upgrade to Basic (PHP 299/mo) or Pro (PHP 799/mo) to continue." });
         }
       }
     } catch (e) {

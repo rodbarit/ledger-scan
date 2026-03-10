@@ -610,29 +610,38 @@ function Dashboard() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminData, setAdminData] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
-  const [togglingPremium, setTogglingPremium] = useState({});
+  const [settingTier, setSettingTier] = useState({});
 
   const isAdmin = isSignedIn && user?.id === import.meta.env.VITE_ADMIN_USER_ID;
 
-  const togglePremium = async (userId, currentPremium) => {
-    setTogglingPremium(prev => ({ ...prev, [userId]: true }));
+  const TIERS = ["free", "basic", "pro"];
+  const TIER_LABELS = { free: "Free", basic: "Basic · ₱299", pro: "Pro · ₱799" };
+  const TIER_STYLES = {
+    free:  { background: "#f3f4f6", color: "#6b7280" },
+    basic: { background: "#eff6ff", color: "#2a5298" },
+    pro:   { background: "#fef3c7", color: "#b45309" },
+  };
+
+  const cycleTier = async (userId, currentTier) => {
+    const next = TIERS[(TIERS.indexOf(currentTier) + 1) % TIERS.length];
+    setSettingTier(prev => ({ ...prev, [userId]: true }));
     try {
       const token = await getToken() ?? "";
-      const res = await fetch("/api/toggle-premium", {
+      const res = await fetch("/api/set-tier", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ userId, premium: !currentPremium })
+        body: JSON.stringify({ userId, tier: next })
       });
       if (res.ok) {
         setAdminData(prev => ({
           ...prev,
-          users: prev.users.map(u => u.userId === userId ? { ...u, premium: !currentPremium } : u)
+          users: prev.users.map(u => u.userId === userId ? { ...u, tier: next } : u)
         }));
       }
     } catch (e) {
-      console.error("Toggle premium error:", e);
+      console.error("Set tier error:", e);
     } finally {
-      setTogglingPremium(prev => ({ ...prev, [userId]: false }));
+      setSettingTier(prev => ({ ...prev, [userId]: false }));
     }
   };
 
@@ -1176,14 +1185,17 @@ function Dashboard() {
                           </td>
                           <td style={{ padding: "9px 14px" }}>
                             <button
-                              onClick={() => togglePremium(u.userId, u.premium)}
-                              disabled={!!togglingPremium[u.userId]}
-                              style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: u.premium ? "#fef3c7" : "#f3f4f6", color: u.premium ? "#b45309" : "#6b7280" }}
+                              onClick={() => cycleTier(u.userId, u.tier)}
+                              disabled={!!settingTier[u.userId]}
+                              title="Click to cycle: Free → Basic → Pro → Free"
+                              style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer", ...TIER_STYLES[u.tier] }}
                             >
-                              {togglingPremium[u.userId] ? "..." : u.premium ? "Premium ✓" : "Free"}
+                              {settingTier[u.userId] ? "..." : TIER_LABELS[u.tier]}
                             </button>
                           </td>
-                          <td style={{ padding: "9px 14px", fontWeight: 700, color: Number(u.scans) >= 100 && !u.premium ? "#c0392b" : "#1a1a2e" }}>{Number(u.scans).toLocaleString()}{!u.premium && ` / 100`}</td>
+                          <td style={{ padding: "9px 14px", fontWeight: 700, color: (u.tier === "free" && Number(u.scans) >= 100) || (u.tier === "basic" && u.scansThisMonth >= 500) ? "#c0392b" : "#1a1a2e" }}>
+                            {u.tier === "basic" ? `${u.scansThisMonth} / 500 mo` : u.tier === "pro" ? `${Number(u.scans).toLocaleString()} ∞` : `${Number(u.scans).toLocaleString()} / 100`}
+                          </td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.scansThisMonth}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.input.toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.output.toLocaleString()}</td>

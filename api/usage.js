@@ -37,20 +37,20 @@ export default async function handler(req, res) {
       keys.map(async (key) => {
         const userId = key.split(":")[1];
         const month = new Date().toISOString().slice(0, 7);
-        const [scans, inputTokens, outputTokens, costMicro, costPhpCentavos, monthlyScans, isPremium, email] = await Promise.all([
+        const [scans, inputTokens, outputTokens, costMicro, costPhpCentavos, monthlyScans, tier, email] = await Promise.all([
           kv.get(`user:${userId}:scans`),
           kv.get(`user:${userId}:tokens:input`),
           kv.get(`user:${userId}:tokens:output`),
           kv.get(`user:${userId}:cost:micro`),
           kv.get(`user:${userId}:cost:php_centavos`),
           kv.get(`user:${userId}:scans:${month}`),
-          kv.get(`user:${userId}:premium`),
+          kv.get(`user:${userId}:tier`),
           kv.get(`user:${userId}:email`),
         ]);
         return {
           userId,
           email: email || null,
-          premium: !!isPremium,
+          tier: tier || "free",
           scans: scans || 0,
           scansThisMonth: monthlyScans || 0,
           tokens: {
