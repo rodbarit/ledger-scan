@@ -28,24 +28,64 @@ export default async function handler(req, res) {
   const session = await verifyClerkToken(token);
   if (!session) return res.status(401).json({ error: "Unauthorized. Please sign in." });
 
-  const { base64, mediaType, isVatRegistered } = req.body || {};
+  const { base64, mediaType, isVatRegistered, entryType } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
 
-  const vatRules = isVatRegistered
-    ? `Rules (VAT-Registered Entity — can claim Input VAT):
+  let prompt;
+
+  if (entryType === "sales") {
+    const salesRules = isVatRegistered
+      ? `Rules (VAT-Registered Entity — Sales):
+- Extract what was sold from the receipt/invoice
+- totalBilling = total amount charged to the customer (including VAT), with currency symbol
+- vatableSales = taxable base (ex-VAT), with currency symbol
+- vat = 12% output VAT amount, with currency symbol
+- For fields that cannot be determined, use ""
+- Return ONLY the JSON object, no other text`
+      : `Rules (Non-VAT Entity — Sales):
+- totalBilling = full amount charged to the customer, with currency symbol
+- vatableSales = "" (non-VAT entity does not charge VAT)
+- vat = "" (non-VAT entity does not charge VAT)
+- For fields that cannot be determined, use ""
+- Return ONLY the JSON object, no other text`;
+
+    prompt = `You are an accounting assistant that extracts structured data from sales receipts/invoices for Philippine BIR compliance.
+
+Analyze the receipt/invoice and return ONLY a valid JSON object with these exact keys (no markdown, no extra text):
+
+- "accountDate": the transaction date in YYYY-MM-DD format.
+  IMPORTANT date reading rules:
+  - Philippine receipts commonly use M/DD/YYYY or MM/DD/YYYY format (month first, then day)
+  - Example: "1/14/2025" means January 14, 2025 → "2025-01-14"
+  - Never swap month and day — always treat the first number as month for Philippine receipts
+  - If only 2 digits are written for year (e.g. "25"), assume 20XX → 2025
+
+- "invoiceReceipt": the invoice or receipt number/reference (OR number) shown on the document
+- "customerName": the name of the customer or buyer shown on the receipt/invoice. If not shown, use ""
+- "salesType": the category of what was sold (e.g. "Merchandise", "Services", "Food & Beverage", "Construction Materials", etc.)
+- "totalBilling": see rules below
+- "vatableSales": see rules below
+- "vat": see rules below
+- "customerCode": leave this as ""
+- "referenceCode": leave this as ""
+
+${salesRules}`;
+  } else {
+    const vatRules = isVatRegistered
+      ? `Rules (VAT-Registered Entity — can claim Input VAT):
 - VAT receipt: vatablePurchase = taxable base (ex-VAT), inputVAT = 12% VAT amount, nonVAT = ""
 - NonVAT receipt (no VAT breakdown): nonVAT = full amount, vatablePurchase = "", inputVAT = ""
 - totalAmountDue is always the grand total the customer paid
 - For fields that cannot be determined, use ""
 - Return ONLY the JSON object, no other text`
-    : `Rules (Non-VAT Entity — CANNOT claim Input VAT):
+      : `Rules (Non-VAT Entity — CANNOT claim Input VAT):
 - ALL receipts (VAT or NonVAT): nonVAT = full amount paid, vatablePurchase = "", inputVAT = "", totalAmountDue = ""
   Example: receipt shows PHP 892.86 taxable + PHP 107.14 VAT → nonVAT = "PHP 1,000.00", vatablePurchase = "", inputVAT = "", totalAmountDue = ""
   Example: receipt shows PHP 500 with no VAT → nonVAT = "PHP 500.00", vatablePurchase = "", inputVAT = "", totalAmountDue = ""
 - For fields that cannot be determined, use ""
 - Return ONLY the JSON object, no other text`;
 
-  const prompt = `You are an accounting assistant that extracts structured data from receipt images for Philippine BIR compliance.
+    prompt = `You are an accounting assistant that extracts structured data from receipt images for Philippine BIR compliance.
 
 Analyze the receipt and return ONLY a valid JSON object with these exact keys (no markdown, no extra text):
 
@@ -69,6 +109,7 @@ Analyze the receipt and return ONLY a valid JSON object with these exact keys (n
 - "referenceCode": leave this as ""
 
 ${vatRules}`;
+  }
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {

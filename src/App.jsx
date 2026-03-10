@@ -15,6 +15,17 @@ const FIELDS = [
   { key: "supplierCode",     label: "Supplier Code",      ai: false },
 ];
 
+const SALES_FIELDS = [
+  { key: "accountDate",    label: "Account Date",      ai: true  },
+  { key: "invoiceReceipt", label: "Invoice / Receipt", ai: true  },
+  { key: "customerName",   label: "Customer Name",     ai: true  },
+  { key: "salesType",      label: "Sales Type",        ai: true  },
+  { key: "totalBilling",   label: "Total Billing",     ai: true  },
+  { key: "vatableSales",   label: "VATable Sales",     ai: true  },
+  { key: "vat",            label: "VAT",               ai: true  },
+  { key: "customerCode",   label: "Customer Code",     ai: false },
+];
+
 // Parse a PHP amount string to a number e.g. "PHP 1,234.56" → 1234.56
 function parseAmount(str) {
   if (!str) return 0;
@@ -54,6 +65,29 @@ function buildFilename(bizCode, ext) {
   return `${(bizCode || "UNKNOWN").trim()}-${date}-${time}.${ext}`;
 }
 
+function toSalesCSV(bizCode, rows, isVatRegistered) {
+  const header = [
+    "Account Date", "Invoice / Receipt", "Customer Name", "Sales Type",
+    "Total Billing", "VATable Sales", "VAT",
+    "Customer Code", "Reference Code", "Business Code", "PDF Page"
+  ];
+  const lines = [
+    header.join(","),
+    ...rows.map((r, i) => {
+      const pageNum = Math.ceil((i + 1) / 2);
+      const pageRef = buildPageRef(bizCode, pageNum);
+      const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
+      const q = v => `"${(v || "").replace(/"/g, '""')}"`;
+      return [
+        q(r.data.accountDate), q(r.data.invoiceReceipt), q(r.data.customerName), q(r.data.salesType),
+        q(r.data.totalBilling), q(isVatRegistered ? r.data.vatableSales : ""), q(isVatRegistered ? r.data.vat : ""),
+        q(r.data.customerCode), q(refCode), q(bizCode), q(pageRef)
+      ].join(",");
+    })
+  ];
+  return lines.join("\n");
+}
+
 function toCSV(bizCode, rows) {
   const header = [
     "Account Date", "Invoice / Receipt", "Supplier Name", "Expense Type",
@@ -80,15 +114,15 @@ function toCSV(bizCode, rows) {
   return lines.join("\n");
 }
 
-const ALL_KEYS = FIELDS.map(f => f.key);
+const ALL_KEYS = [...new Set([...FIELDS.map(f => f.key), ...SALES_FIELDS.map(f => f.key)])];
 const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 
 // ── API helpers ────────────────────────────────────────────────────────────
-async function extractReceiptData(base64, mediaType, token, isVatRegistered) {
+async function extractReceiptData(base64, mediaType, token, isVatRegistered, entryType) {
   const response = await fetch("/api/extract", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-    body: JSON.stringify({ base64, mediaType, isVatRegistered })
+    body: JSON.stringify({ base64, mediaType, isVatRegistered, entryType })
   });
   const json = await response.json();
   if (!response.ok) throw new Error(json.error || "Extraction failed");
@@ -567,7 +601,7 @@ function Dashboard() {
           reader.onerror = rej;
           reader.readAsDataURL(item.file);
         });
-        const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered);
+        const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered, entryType);
         setReceipts(prev => prev.map(r => r.id === item.id
           ? { ...r, status: "done", data: { ...EMPTY_DATA(), ...extracted } } : r));
       } catch (e) {
@@ -588,7 +622,8 @@ function Dashboard() {
 
   const downloadCSV = () => {
     if (!doneCount) return;
-    const blob = new Blob([toCSV(bizCode, done)], { type: "text/csv" });
+    const csv = entryType === "sales" ? toSalesCSV(bizCode, done, isVatRegistered) : toCSV(bizCode, done);
+    const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = buildFilename(bizCode, "csv");
@@ -820,27 +855,35 @@ function Dashboard() {
                           <span>AI Extracted Fields</span><div style={{ flex: 1, height: 1, background: "#dbeafe" }} />
                         </div>
                         <div className="fields-grid">
-                          {/* Regular AI fields from FIELDS array */}
-                          {FIELDS.filter(f => f.ai && (isVatRegistered !== false || f.key !== "inputVAT")).map(f => (
-                            <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />
-                          ))}
-                          {/* Total Expense — auto-computed from VATable + NonVAT */}
-                          <div>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                              Total Expense
-                              <span style={{ fontSize: 9, background: "#dcfce7", color: "#15803d", padding: "1px 6px", borderRadius: 3, fontWeight: 600, letterSpacing: "0.05em" }}>COMPUTED</span>
-                            </div>
-                            <div style={{ padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, fontSize: 13, color: "#15803d", fontWeight: 600 }}>
-                              {computeTotalExpense(r.data) || <span style={{ color: "#d1d5db", fontWeight: 400 }}>VATable + NonVAT</span>}
-                            </div>
-                          </div>
-                          {/* Total Amount Due — AI extracted */}
-                          <FieldInput
-                            field={{ key: "totalAmountDue", label: "Total Amount Due", ai: true }}
-                            value={r.data.totalAmountDue}
-                            onChange={v => updateField(r.id, "totalAmountDue", v)}
-                            accentColor="#2a5298"
-                          />
+                          {entryType === "sales"
+                            ? SALES_FIELDS.filter(f => f.ai && (isVatRegistered !== false || (f.key !== "vatableSales" && f.key !== "vat"))).map(f => (
+                                <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />
+                              ))
+                            : FIELDS.filter(f => f.ai && (isVatRegistered !== false || f.key !== "inputVAT")).map(f => (
+                                <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />
+                              ))
+                          }
+                          {entryType !== "sales" && (
+                            <>
+                              {/* Total Expense — auto-computed from VATable + NonVAT */}
+                              <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                                  Total Expense
+                                  <span style={{ fontSize: 9, background: "#dcfce7", color: "#15803d", padding: "1px 6px", borderRadius: 3, fontWeight: 600, letterSpacing: "0.05em" }}>COMPUTED</span>
+                                </div>
+                                <div style={{ padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, fontSize: 13, color: "#15803d", fontWeight: 600 }}>
+                                  {computeTotalExpense(r.data) || <span style={{ color: "#d1d5db", fontWeight: 400 }}>VATable + NonVAT</span>}
+                                </div>
+                              </div>
+                              {/* Total Amount Due — AI extracted */}
+                              <FieldInput
+                                field={{ key: "totalAmountDue", label: "Total Amount Due", ai: true }}
+                                value={r.data.totalAmountDue}
+                                onChange={v => updateField(r.id, "totalAmountDue", v)}
+                                accentColor="#2a5298"
+                              />
+                            </>
+                          )}
                           {/* Reference Code — auto-built but editable */}
                           <div>
                             <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
@@ -862,7 +905,9 @@ function Dashboard() {
                           <span>Manual Entry Fields</span><div style={{ flex: 1, height: 1, background: "#fde68a" }} />
                         </div>
                         <div className="fields-grid">
-                          {FIELDS.filter(f => !f.ai).map(f => <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#b45309" />)}
+                          {(entryType === "sales" ? SALES_FIELDS : FIELDS).filter(f => !f.ai).map(f => (
+                            <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#b45309" />
+                          ))}
                         </div>
                       </div>
                     </>
