@@ -39,11 +39,9 @@ export default async function handler(req, res) {
 - For fields that cannot be determined, use ""
 - Return ONLY the JSON object, no other text`
     : `Rules (Non-VAT Entity — CANNOT claim Input VAT):
-- VAT receipt: vatablePurchase = FULL amount paid (taxable base + VAT combined), inputVAT = "", nonVAT = ""
-  Example: receipt shows PHP 892.86 taxable + PHP 107.14 VAT → vatablePurchase = "PHP 1,000.00", inputVAT = ""
-- NonVAT receipt (no VAT breakdown): nonVAT = full amount, vatablePurchase = "", inputVAT = ""
-- inputVAT must ALWAYS be "" — this entity cannot claim VAT as a tax credit
-- totalAmountDue is always the grand total the customer paid
+- ALL receipts (VAT or NonVAT): nonVAT = full amount paid, vatablePurchase = "", inputVAT = "", totalAmountDue = ""
+  Example: receipt shows PHP 892.86 taxable + PHP 107.14 VAT → nonVAT = "PHP 1,000.00", vatablePurchase = "", inputVAT = "", totalAmountDue = ""
+  Example: receipt shows PHP 500 with no VAT → nonVAT = "PHP 500.00", vatablePurchase = "", inputVAT = "", totalAmountDue = ""
 - For fields that cannot be determined, use ""
 - Return ONLY the JSON object, no other text`;
 
