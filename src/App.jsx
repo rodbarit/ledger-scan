@@ -952,6 +952,44 @@ function Dashboard() {
             </div>
           </div>
         )}
+
+        {doneCount > 0 && (
+          <div style={{ marginTop: 24, background: "#fff", borderRadius: 8, border: "1px solid #e5e2de", overflow: "hidden" }}>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f0ece8", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#666" }}>Data Preview</span>
+              <span style={{ fontSize: 11, color: "#aaa" }}>— {doneCount} row{doneCount !== 1 ? "s" : ""}</span>
+            </div>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                <thead>
+                  <tr style={{ background: "#f8f7f5" }}>
+                    {(entryType === "sales"
+                      ? ["#", "Date", "Invoice/OR", "Client Name", "Sales Type", "Total Billing", ...(isVatRegistered ? ["VATable Sales", "VAT"] : []), "Client Code", "Ref Code"]
+                      : ["#", "Date", "Invoice/OR", "Supplier", "Expense Type", "VATable", "NonVAT", ...(isVatRegistered ? ["Input VAT"] : []), "Total Expense", "Total Amt Due", "Supplier Code", "Ref Code"]
+                    ).map(h => (
+                      <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {done.map((r, i) => {
+                    const refCode = r.data.referenceCode || buildReferenceCode(bizCode, r.data);
+                    const cells = entryType === "sales"
+                      ? [i + 1, r.data.accountDate, r.data.invoiceReceipt, r.data.customerName, r.data.salesType, r.data.totalBilling, ...(isVatRegistered ? [r.data.vatableSales, r.data.vat] : []), r.data.customerCode, refCode]
+                      : [i + 1, r.data.accountDate, r.data.invoiceReceipt, r.data.supplierName, r.data.expenseType, r.data.vatablePurchase, r.data.nonVAT, ...(isVatRegistered ? [r.data.inputVAT] : []), computeTotalExpense(r.data), r.data.totalAmountDue, r.data.supplierCode, refCode];
+                    return (
+                      <tr key={r.id} style={{ borderBottom: "1px solid #f0ece8", background: i % 2 === 0 ? "#fff" : "#fafaf9" }}>
+                        {cells.map((v, ci) => (
+                          <td key={ci} style={{ padding: "7px 12px", color: v ? "#1a1a2e" : "#ccc", fontSize: 12 }}>{v || "—"}</td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
       <style>{`
         @keyframes shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
