@@ -3,7 +3,7 @@ import {
   SignedIn, SignedOut, SignIn, useUser, useClerk, useAuth, SignInButton
 } from "@clerk/clerk-react";
 
-const FREE_SCAN_LIMIT = 5;
+const FREE_SCAN_LIMIT = 20;
 
 // ── Field definitions ──────────────────────────────────────────────────────
 const FIELDS = [
@@ -134,11 +134,11 @@ const ALL_KEYS = [...new Set([...FIELDS.map(f => f.key), ...SALES_FIELDS.map(f =
 const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 
 // ── API helpers ────────────────────────────────────────────────────────────
-async function extractReceiptData(base64, mediaType, token, isVatRegistered, entryType) {
+async function extractReceiptData(base64, mediaType, token, isVatRegistered, entryType, userEmail) {
   const response = await fetch("/api/extract", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-    body: JSON.stringify({ base64, mediaType, isVatRegistered, entryType })
+    body: JSON.stringify({ base64, mediaType, isVatRegistered, entryType, userEmail })
   });
   const json = await response.json();
   if (!response.ok) throw new Error(json.error || "Extraction failed");
@@ -610,8 +610,31 @@ function Dashboard() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminData, setAdminData] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [togglingPremium, setTogglingPremium] = useState({});
 
   const isAdmin = isSignedIn && user?.id === import.meta.env.VITE_ADMIN_USER_ID;
+
+  const togglePremium = async (userId, currentPremium) => {
+    setTogglingPremium(prev => ({ ...prev, [userId]: true }));
+    try {
+      const token = await getToken() ?? "";
+      const res = await fetch("/api/toggle-premium", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ userId, premium: !currentPremium })
+      });
+      if (res.ok) {
+        setAdminData(prev => ({
+          ...prev,
+          users: prev.users.map(u => u.userId === userId ? { ...u, premium: !currentPremium } : u)
+        }));
+      }
+    } catch (e) {
+      console.error("Toggle premium error:", e);
+    } finally {
+      setTogglingPremium(prev => ({ ...prev, [userId]: false }));
+    }
+  };
 
   const loadAdminData = async () => {
     setAdminLoading(true);
@@ -661,7 +684,8 @@ function Dashboard() {
           reader.onerror = rej;
           reader.readAsDataURL(item.file);
         });
-        const raw = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered, entryType);
+        const userEmail = user?.emailAddresses?.[0]?.emailAddress || null;
+        const raw = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered, entryType, userEmail);
         const extracted = normalizeTitleCase(raw);
         if (!isSignedIn) {
           const next = freeScans + 1;
@@ -1138,7 +1162,7 @@ function Dashboard() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, whiteSpace: "nowrap" }}>
                     <thead>
                       <tr style={{ background: "#f8f7f5" }}>
-                        {["User ID", "Plan", "This Month", "Total Scans", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
+                        {["Email", "Plan", "This Month", "Total Scans", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
                           <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
                         ))}
                       </tr>
@@ -1146,13 +1170,20 @@ function Dashboard() {
                     <tbody>
                       {adminData.users.map((u, i) => (
                         <tr key={u.userId} style={{ borderBottom: "1px solid #f0ece8", background: i % 2 === 0 ? "#fff" : "#fafaf9" }}>
-                          <td style={{ padding: "9px 14px", color: "#666", fontFamily: "monospace", fontSize: 11 }}>{u.userId}</td>
-                          <td style={{ padding: "9px 14px" }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: u.premium ? "#fef3c7" : "#f3f4f6", color: u.premium ? "#b45309" : "#6b7280" }}>
-                              {u.premium ? "Premium" : "Free"}
-                            </span>
+                          <td style={{ padding: "9px 14px", color: "#1a1a2e", fontSize: 12 }}>
+                            <div>{u.email || <span style={{ color: "#ccc", fontStyle: "italic" }}>unknown</span>}</div>
+                            <div style={{ color: "#aaa", fontFamily: "monospace", fontSize: 10 }}>{u.userId.slice(0, 20)}…</div>
                           </td>
-                          <td style={{ padding: "9px 14px", fontWeight: 700, color: u.scansThisMonth >= 50 && !u.premium ? "#c0392b" : "#1a1a2e" }}>{u.scansThisMonth}{!u.premium && ` / 50`}</td>
+                          <td style={{ padding: "9px 14px" }}>
+                            <button
+                              onClick={() => togglePremium(u.userId, u.premium)}
+                              disabled={!!togglingPremium[u.userId]}
+                              style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer", background: u.premium ? "#fef3c7" : "#f3f4f6", color: u.premium ? "#b45309" : "#6b7280" }}
+                            >
+                              {togglingPremium[u.userId] ? "..." : u.premium ? "Premium ✓" : "Free"}
+                            </button>
+                          </td>
+                          <td style={{ padding: "9px 14px", fontWeight: 700, color: u.scansThisMonth >= 100 && !u.premium ? "#c0392b" : "#1a1a2e" }}>{u.scansThisMonth}{!u.premium && ` / 100`}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{Number(u.scans).toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.input.toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.output.toLocaleString()}</td>

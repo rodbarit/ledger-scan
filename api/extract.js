@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   // Guests (no token) allowed — free scan limit enforced client-side
 
   // Check monthly scan limit for signed-in users (premium users are unlimited)
-  const MONTHLY_LIMIT = 50;
+  const MONTHLY_LIMIT = 100;
   if (session) {
     const userId = session.sub;
     try {
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const { base64, mediaType, isVatRegistered, entryType } = req.body || {};
+  const { base64, mediaType, isVatRegistered, entryType, userEmail } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
 
   let prompt;
@@ -188,6 +188,7 @@ ${vatRules}`;
         pipe.incrby(`user:${userId}:cost:php_centavos`, costPhpCentavos);
         pipe.incr(monthlyKey);
         pipe.expire(monthlyKey, 60 * 60 * 24 * 35); // auto-expire after 35 days
+        if (userEmail) pipe.set(`user:${userId}:email`, userEmail);
         await pipe.exec();
       } catch (e) {
         console.error("KV tracking error:", e);
