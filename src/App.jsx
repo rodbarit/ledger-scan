@@ -606,6 +606,9 @@ function Dashboard() {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const UPGRADE_URL = "https://forms.gle/ugu9Fe1aFGTNVaMk7";
   const [freeScans, setFreeScans] = useState(() => parseInt(localStorage.getItem("freeScans") || "0"));
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminData, setAdminData] = useState(null);
@@ -718,7 +721,10 @@ function Dashboard() {
         setReceipts(prev => prev.map(r => r.id === item.id
           ? { ...r, status: "done", data: { ...EMPTY_DATA(), ...extracted } } : r));
       } catch (e) {
-        if (e.message?.toLowerCase().includes("daily limit")) setGlobalError(e.message);
+        if (e.message?.toLowerCase().includes("limit")) {
+          if (isSignedIn) setShowUpgrade(true);
+          else setShowSignUp(true);
+        }
         setReceipts(prev => prev.map(r => r.id === item.id ? { ...r, status: "error", error: e.message } : r));
       }
     }
@@ -861,7 +867,7 @@ function Dashboard() {
           {isSignedIn
             ? <>
                 {userStats && (
-                  <div style={{ fontSize: 11, color: "#8899bb", display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{ fontSize: 11, color: "#8899bb", display: "flex", alignItems: "center", gap: 8 }}>
                     {userStats.tier === "pro"
                       ? <span style={{ color: "#fbbf24", fontWeight: 700 }}>Pro · Unlimited</span>
                       : userStats.tier === "basic"
@@ -872,6 +878,12 @@ function Dashboard() {
                             <strong style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> free scans left
                           </span>
                     }
+                    {userStats.tier !== "pro" && (
+                      <button onClick={() => setShowUpgrade(true)} style={{
+                        background: "#2a5298", color: "#fff", border: "none", borderRadius: 4,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+                      }}>Upgrade</button>
+                    )}
                   </div>
                 )}
                 <UserMenu />
@@ -1238,6 +1250,44 @@ function Dashboard() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade modal for signed-in users */}
+      {showUpgrade && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 440, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🚀</div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>
+              Upgrade LedgerScan
+            </div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 24, lineHeight: 1.6 }}>
+              Choose a plan and pay via GCash. We'll upgrade your account within the day.
+            </div>
+
+            {/* Plan cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24, textAlign: "left" }}>
+              {[
+                { name: "Basic", price: "₱499/mo", limit: "200 scans/month", color: "#2a5298", bg: "#eff6ff" },
+                { name: "Pro", price: "₱999/mo", limit: "Unlimited scans", color: "#b45309", bg: "#fef3c7" },
+              ].map(p => (
+                <div key={p.name} style={{ border: `1.5px solid ${p.color}44`, borderRadius: 10, padding: "14px 16px", background: p.bg }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: p.color, marginBottom: 4 }}>{p.name}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e", marginBottom: 4 }}>{p.price}</div>
+                  <div style={{ fontSize: 11, color: "#666" }}>{p.limit}</div>
+                </div>
+              ))}
+            </div>
+
+            <a href={UPGRADE_URL} target="_blank" rel="noreferrer" style={{ display: "block", width: "100%", marginBottom: 12 }}>
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em" }}>
+                Upgrade Now →
+              </button>
+            </a>
+            <button onClick={() => setShowUpgrade(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+              Maybe later
+            </button>
           </div>
         </div>
       )}
