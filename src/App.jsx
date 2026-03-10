@@ -593,6 +593,25 @@ function Dashboard() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const [freeScans, setFreeScans] = useState(() => parseInt(localStorage.getItem("freeScans") || "0"));
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminData, setAdminData] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  const isAdmin = isSignedIn && user?.id === import.meta.env.VITE_ADMIN_USER_ID;
+
+  const loadAdminData = async () => {
+    setAdminLoading(true);
+    try {
+      const token = await getToken() ?? "";
+      const res = await fetch("/api/usage", { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      setAdminData(json);
+    } catch (e) {
+      console.error("Admin fetch error:", e);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
   const fileRef = useRef();
 
   const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
@@ -770,6 +789,13 @@ function Dashboard() {
             fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !sendingEmail ? "pointer" : "not-allowed",
             letterSpacing: "0.06em", textTransform: "uppercase"
           }}>{sendingEmail ? "⟳ Sending..." : "✉ Email"}</button>
+          {isAdmin && (
+            <button onClick={() => { setShowAdmin(true); loadAdminData(); }} style={{
+              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 4, padding: "6px 12px", fontSize: 11, fontWeight: 700,
+              color: "#fbbf24", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em"
+            }}>⚙ Admin</button>
+          )}
           {isSignedIn
             ? <UserMenu />
             : <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1063,6 +1089,65 @@ function Dashboard() {
           .subbar-right { display: none !important; }
         }
       `}</style>
+
+      {/* Admin panel */}
+      {showAdmin && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+          <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 800, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid #e5e2de" }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 700, color: "#1a1a2e" }}>Admin — Usage Stats</div>
+              <button onClick={() => setShowAdmin(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#999" }}>×</button>
+            </div>
+
+            {adminLoading && <div style={{ padding: 40, textAlign: "center", color: "#888" }}>Loading...</div>}
+
+            {!adminLoading && adminData && (
+              <div style={{ padding: 24 }}>
+                {/* Summary cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+                  {[
+                    { label: "Total Users", value: adminData.summary.totalUsers },
+                    { label: "Total Scans", value: adminData.summary.totalScans },
+                    { label: "Total Cost (USD)", value: `$${adminData.summary.totalCost.usd}` },
+                    { label: "Total Cost (PHP)", value: `₱${adminData.summary.totalCost.php}` },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ background: "#f8f7f5", borderRadius: 8, padding: "16px", border: "1px solid #e5e2de" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#999", marginBottom: 6 }}>{label}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Per-user table */}
+                <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid #e5e2de" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, whiteSpace: "nowrap" }}>
+                    <thead>
+                      <tr style={{ background: "#f8f7f5" }}>
+                        {["User ID", "Scans", "Input Tokens", "Output Tokens", "Total Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
+                          <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminData.users.map((u, i) => (
+                        <tr key={u.userId} style={{ borderBottom: "1px solid #f0ece8", background: i % 2 === 0 ? "#fff" : "#fafaf9" }}>
+                          <td style={{ padding: "9px 14px", color: "#666", fontFamily: "monospace", fontSize: 11 }}>{u.userId}</td>
+                          <td style={{ padding: "9px 14px", fontWeight: 700, color: "#1a1a2e" }}>{u.scans}</td>
+                          <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.input.toLocaleString()}</td>
+                          <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.output.toLocaleString()}</td>
+                          <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.total.toLocaleString()}</td>
+                          <td style={{ padding: "9px 14px", color: "#15803d", fontWeight: 600 }}>${u.cost.usd}</td>
+                          <td style={{ padding: "9px 14px", color: "#b45309", fontWeight: 600 }}>₱{u.cost.php}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Sign-up modal for guests who hit the free limit */}
       {showSignUp && (
