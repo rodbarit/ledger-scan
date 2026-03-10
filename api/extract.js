@@ -155,11 +155,14 @@ ${vatRules}`;
       const userId = session.sub;
       const inputTokens = anthropicData.usage?.input_tokens || 0;
       const outputTokens = anthropicData.usage?.output_tokens || 0;
+      const costUSD = (inputTokens / 1_000_000) * 3.00 + (outputTokens / 1_000_000) * 15.00;
+      const costMicro = Math.round(costUSD * 1_000_000); // store as integer microdollars
       try {
         await Promise.all([
           kv.incr(`user:${userId}:scans`),
           kv.incrby(`user:${userId}:tokens:input`, inputTokens),
           kv.incrby(`user:${userId}:tokens:output`, outputTokens),
+          kv.incrby(`user:${userId}:cost:micro`, costMicro),
         ]);
       } catch (e) {
         console.error("KV tracking error:", e);
