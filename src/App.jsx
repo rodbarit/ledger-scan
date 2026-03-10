@@ -479,12 +479,14 @@ function BizCodeScreen({ onConfirm }) {
           </button>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
-          Signed in as {user?.emailAddresses?.[0]?.emailAddress} ·{" "}
-          <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>
-            Sign out
-          </button>
-        </div>
+        {user && (
+          <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
+            Signed in as {user?.emailAddresses?.[0]?.emailAddress} ·{" "}
+            <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>
+              Sign out
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -547,8 +549,8 @@ function Dashboard() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const fileRef = useRef();
 
-  // Show business code entry screen first (skip for guests)
-  if (!bizCode && !isGuest) return <BizCodeScreen onConfirm={setBizCode} />;
+  // Show business code entry screen first
+  if (!bizCode) return <BizCodeScreen onConfirm={setBizCode} />;
 
   const processFiles = async (files) => {
     setGlobalError(null);
