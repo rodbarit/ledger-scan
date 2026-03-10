@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   SignedIn, SignedOut, SignIn, useUser, useClerk, useAuth, SignInButton
 } from "@clerk/clerk-react";
@@ -610,6 +610,7 @@ function Dashboard() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminData, setAdminData] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [userStats, setUserStats] = useState(null);
   const [settingTier, setSettingTier] = useState({});
 
   const isAdmin = isSignedIn && user?.id === import.meta.env.VITE_ADMIN_USER_ID;
@@ -644,6 +645,17 @@ function Dashboard() {
       setSettingTier(prev => ({ ...prev, [userId]: false }));
     }
   };
+
+  const fetchUserStats = useCallback(async () => {
+    if (!isSignedIn) return;
+    try {
+      const token = await getToken() ?? "";
+      const res = await fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setUserStats(await res.json());
+    } catch {}
+  }, [isSignedIn, getToken]);
+
+  useEffect(() => { fetchUserStats(); }, [fetchUserStats]);
 
   const loadAdminData = async () => {
     setAdminLoading(true);
@@ -700,6 +712,8 @@ function Dashboard() {
           const next = freeScans + 1;
           localStorage.setItem("freeScans", next);
           setFreeScans(next);
+        } else {
+          fetchUserStats();
         }
         setReceipts(prev => prev.map(r => r.id === item.id
           ? { ...r, status: "done", data: { ...EMPTY_DATA(), ...extracted } } : r));
@@ -845,7 +859,23 @@ function Dashboard() {
             }}>⚙ Admin</button>
           )}
           {isSignedIn
-            ? <UserMenu />
+            ? <>
+                {userStats && (
+                  <div style={{ fontSize: 11, color: "#8899bb", display: "flex", alignItems: "center", gap: 4 }}>
+                    {userStats.tier === "pro"
+                      ? <span style={{ color: "#fbbf24", fontWeight: 700 }}>Pro · Unlimited</span>
+                      : userStats.tier === "basic"
+                        ? <span style={{ color: userStats.scansLeft <= 50 ? "#f87171" : "#7eb8f7" }}>
+                            <strong style={{ color: userStats.scansLeft <= 50 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> scans left this month
+                          </span>
+                        : <span style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#7eb8f7" }}>
+                            <strong style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> free scans left
+                          </span>
+                    }
+                  </div>
+                )}
+                <UserMenu />
+              </>
             : <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 11, color: freeScansLeft <= 1 ? "#f87171" : "#7eb8f7" }}>
                   {freeScansLeft} free scan{freeScansLeft !== 1 ? "s" : ""} left
