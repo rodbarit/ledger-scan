@@ -84,11 +84,11 @@ const ALL_KEYS = FIELDS.map(f => f.key);
 const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 
 // ── API helpers ────────────────────────────────────────────────────────────
-async function extractReceiptData(base64, mediaType, token) {
+async function extractReceiptData(base64, mediaType, token, isVatRegistered) {
   const response = await fetch("/api/extract", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-    body: JSON.stringify({ base64, mediaType })
+    body: JSON.stringify({ base64, mediaType, isVatRegistered })
   });
   const json = await response.json();
   if (!response.ok) throw new Error(json.error || "Extraction failed");
@@ -424,6 +424,7 @@ function BizCodeScreen({ onConfirm }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [value, setValue] = useState("");
+  const [vatRegistered, setVatRegistered] = useState(null);
 
   return (
     <div style={{
@@ -450,7 +451,7 @@ function BizCodeScreen({ onConfirm }) {
             autoFocus
             value={value}
             onChange={e => setValue(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === "Enter" && value.trim() && onConfirm(value.trim())}
+            onKeyDown={e => e.key === "Enter" && value.trim() && vatRegistered !== null && onConfirm(value.trim(), vatRegistered)}
             placeholder="e.g. PH-OP"
             style={{
               width: "100%", padding: "12px 14px", fontSize: 15, borderRadius: 8,
@@ -461,13 +462,34 @@ function BizCodeScreen({ onConfirm }) {
             onFocus={e => e.target.style.borderColor = "#1a1a2e"}
             onBlur={e => e.target.style.borderColor = "#ddd"}
           />
+
+          <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#666", display: "block", marginBottom: 10 }}>
+            VAT-Registered Entity <span style={{ color: "#c0392b" }}>*</span>
+          </label>
+          <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+            {[{ label: "Yes", val: true }, { label: "No", val: false }].map(({ label, val }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setVatRegistered(val)}
+                style={{
+                  flex: 1, padding: "10px", borderRadius: 8, border: `1.5px solid ${vatRegistered === val ? "#1a1a2e" : "#ddd"}`,
+                  background: vatRegistered === val ? "#1a1a2e" : "#fff",
+                  color: vatRegistered === val ? "#fff" : "#555",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", transition: "all 0.15s"
+                }}
+              >{label}</button>
+            ))}
+          </div>
+
           <button
-            onClick={() => value.trim() && onConfirm(value.trim())}
+            onClick={() => value.trim() && vatRegistered !== null && onConfirm(value.trim(), vatRegistered)}
             style={{
               width: "100%", padding: "13px", borderRadius: 8, border: "none",
-              background: value.trim() ? "#1a1a2e" : "#e5e2de",
-              color: value.trim() ? "#fff" : "#aaa",
-              fontSize: 14, fontWeight: 700, cursor: value.trim() ? "pointer" : "default",
+              background: value.trim() && vatRegistered !== null ? "#1a1a2e" : "#e5e2de",
+              color: value.trim() && vatRegistered !== null ? "#fff" : "#aaa",
+              fontSize: 14, fontWeight: 700, cursor: value.trim() && vatRegistered !== null ? "pointer" : "default",
               fontFamily: "inherit", letterSpacing: "0.06em", transition: "all 0.2s"
             }}
           >
@@ -491,6 +513,7 @@ function Dashboard() {
   const { user } = useUser();
   const { getToken } = useAuth();
   const [bizCode, setBizCode] = useState("");
+  const [isVatRegistered, setIsVatRegistered] = useState(null);
   const [receipts, setReceipts] = useState([]);
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
@@ -501,7 +524,7 @@ function Dashboard() {
   const fileRef = useRef();
 
   // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={setBizCode} />;
+  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat) => { setBizCode(biz); setIsVatRegistered(vat); }} />;
 
   const processFiles = async (files) => {
     setGlobalError(null);
@@ -522,7 +545,7 @@ function Dashboard() {
           reader.onerror = rej;
           reader.readAsDataURL(item.file);
         });
-        const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token);
+        const extracted = await extractReceiptData(base64, item.file.type || "image/jpeg", token, isVatRegistered);
         setReceipts(prev => prev.map(r => r.id === item.id
           ? { ...r, status: "done", data: { ...EMPTY_DATA(), ...extracted } } : r));
       } catch (e) {
@@ -776,7 +799,7 @@ function Dashboard() {
                         </div>
                         <div className="fields-grid">
                           {/* Regular AI fields from FIELDS array */}
-                          {FIELDS.filter(f => f.ai).map(f => (
+                          {FIELDS.filter(f => f.ai && (isVatRegistered !== false || f.key !== "inputVAT")).map(f => (
                             <FieldInput key={f.key} field={f} value={r.data[f.key]} onChange={v => updateField(r.id, f.key, v)} accentColor="#2a5298" />
                           ))}
                           {/* Total Expense — auto-computed from VATable + NonVAT */}

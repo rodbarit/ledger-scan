@@ -28,14 +28,30 @@ export default async function handler(req, res) {
   const session = await verifyClerkToken(token);
   if (!session) return res.status(401).json({ error: "Unauthorized. Please sign in." });
 
-  const { base64, mediaType } = req.body || {};
+  const { base64, mediaType, isVatRegistered } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
+
+  const vatRules = isVatRegistered
+    ? `Rules (VAT-Registered Entity — can claim Input VAT):
+- VAT receipt: vatablePurchase = taxable base (ex-VAT), inputVAT = 12% VAT amount, nonVAT = ""
+- NonVAT receipt (no VAT breakdown): nonVAT = full amount, vatablePurchase = "", inputVAT = ""
+- totalAmountDue is always the grand total the customer paid
+- For fields that cannot be determined, use ""
+- Return ONLY the JSON object, no other text`
+    : `Rules (Non-VAT Entity — CANNOT claim Input VAT):
+- VAT receipt: vatablePurchase = FULL amount paid (taxable base + VAT combined), inputVAT = "", nonVAT = ""
+  Example: receipt shows PHP 892.86 taxable + PHP 107.14 VAT → vatablePurchase = "PHP 1,000.00", inputVAT = ""
+- NonVAT receipt (no VAT breakdown): nonVAT = full amount, vatablePurchase = "", inputVAT = ""
+- inputVAT must ALWAYS be "" — this entity cannot claim VAT as a tax credit
+- totalAmountDue is always the grand total the customer paid
+- For fields that cannot be determined, use ""
+- Return ONLY the JSON object, no other text`;
 
   const prompt = `You are an accounting assistant that extracts structured data from receipt images for Philippine BIR compliance.
 
 Analyze the receipt and return ONLY a valid JSON object with these exact keys (no markdown, no extra text):
 
-- "accountDate": the transaction date in YYYY-MM-DD format. 
+- "accountDate": the transaction date in YYYY-MM-DD format.
   IMPORTANT date reading rules:
   - Philippine receipts commonly use M/DD/YYYY or MM/DD/YYYY format (month first, then day)
   - Example: "1/14/2025" or "1/14 2025" means January 14, 2025 → "2025-01-14"
@@ -48,21 +64,13 @@ Analyze the receipt and return ONLY a valid JSON object with these exact keys (n
 - "invoiceReceipt": the invoice or receipt number/reference (OR number) shown on the document
 - "supplierName": the name of the business or establishment that issued the receipt (e.g. "Petron", "McDonald's", "SM Supermarket")
 - "expenseType": the category of expense (e.g. "Meals & Entertainment", "Office Supplies", "Transportation", "Utilities", "Professional Services", "Gas", "Building Materials", etc.)
-- "vatablePurchase": the VATable purchase amount (taxable base, BEFORE VAT is added), with currency symbol. ONLY include if the receipt explicitly shows a VATable/taxable amount. If not shown, use ""
-- "nonVAT": the VAT-exempt or zero-rated purchase amount, with currency symbol. Use this when:
-    (a) the receipt explicitly shows a NonVAT / VAT-exempt / zero-rated amount, OR
-    (b) the receipt has no VAT breakdown at all (no VATable line, no VAT line) — in this case put the full purchase amount here
-    If not applicable, use ""
-- "inputVAT": the VAT amount (12% tax), ONLY if explicitly shown as a separate line on the receipt. If not shown, use ""
+- "vatablePurchase": see rules below
+- "nonVAT": the VAT-exempt or zero-rated purchase amount, with currency symbol. See rules below.
+- "inputVAT": the VAT amount (12% tax). See rules below.
 - "totalAmountDue": the final total amount actually paid, with currency symbol (e.g. "PHP 1,250.00"). This is the grand total printed on the receipt.
 - "referenceCode": leave this as ""
 
-Rules:
-- VAT receipt: vatablePurchase = taxable base, inputVAT = 12% VAT, nonVAT = ""
-- NonVAT receipt (no VAT breakdown): nonVAT = full amount, vatablePurchase = "", inputVAT = ""
-- totalAmountDue is always the grand total the customer paid
-- For fields that cannot be determined, use ""
-- Return ONLY the JSON object, no other text`;
+${vatRules}`;
 
   try {
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
