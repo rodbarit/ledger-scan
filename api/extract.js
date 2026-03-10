@@ -30,16 +30,15 @@ export default async function handler(req, res) {
   // Guests (no token) allowed — free scan limit enforced client-side
 
   // Check monthly scan limit for signed-in users (premium users are unlimited)
-  const MONTHLY_LIMIT = 100;
+  const FREE_SCAN_LIMIT = 100;
   if (session) {
     const userId = session.sub;
     try {
       const isPremium = await kv.get(`user:${userId}:premium`);
       if (!isPremium) {
-        const month = new Date().toISOString().slice(0, 7);
-        const monthlyScans = (await kv.get(`user:${userId}:scans:${month}`)) || 0;
-        if (monthlyScans >= MONTHLY_LIMIT) {
-          return res.status(429).json({ error: `Monthly limit reached. You've used all ${MONTHLY_LIMIT} scans for this month. Resets next month.` });
+        const totalScans = (await kv.get(`user:${userId}:scans`)) || 0;
+        if (totalScans >= FREE_SCAN_LIMIT) {
+          return res.status(429).json({ error: `You've used all ${FREE_SCAN_LIMIT} free scans. Please contact us to upgrade to premium for unlimited scans.` });
         }
       }
     } catch (e) {

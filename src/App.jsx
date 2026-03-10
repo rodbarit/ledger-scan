@@ -583,7 +583,7 @@ function BizCodeScreen({ onConfirm }) {
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
           {user
             ? <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>
-            : <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign in for unlimited scans</button></SignInButton>
+            : <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
           }
         </div>
       </div>
@@ -1162,7 +1162,7 @@ function Dashboard() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, whiteSpace: "nowrap" }}>
                     <thead>
                       <tr style={{ background: "#f8f7f5" }}>
-                        {["Email", "Plan", "This Month", "Total Scans", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
+                        {["Email", "Plan", "Scans / Limit", "This Month", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
                           <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
                         ))}
                       </tr>
@@ -1183,8 +1183,8 @@ function Dashboard() {
                               {togglingPremium[u.userId] ? "..." : u.premium ? "Premium ✓" : "Free"}
                             </button>
                           </td>
-                          <td style={{ padding: "9px 14px", fontWeight: 700, color: u.scansThisMonth >= 100 && !u.premium ? "#c0392b" : "#1a1a2e" }}>{u.scansThisMonth}{!u.premium && ` / 100`}</td>
-                          <td style={{ padding: "9px 14px", color: "#555" }}>{Number(u.scans).toLocaleString()}</td>
+                          <td style={{ padding: "9px 14px", fontWeight: 700, color: Number(u.scans) >= 100 && !u.premium ? "#c0392b" : "#1a1a2e" }}>{Number(u.scans).toLocaleString()}{!u.premium && ` / 100`}</td>
+                          <td style={{ padding: "9px 14px", color: "#555" }}>{u.scansThisMonth}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.input.toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#555" }}>{u.tokens.output.toLocaleString()}</td>
                           <td style={{ padding: "9px 14px", color: "#15803d", fontWeight: 600 }}>${u.cost.usd}</td>
@@ -1209,7 +1209,7 @@ function Dashboard() {
               You've used your {FREE_SCAN_LIMIT} free scans
             </div>
             <div style={{ fontSize: 13, color: "#888", marginBottom: 28, lineHeight: 1.6 }}>
-              Sign up for free to keep scanning receipts with no interruptions.
+              Sign up for free and get <strong>100 scans</strong> — no monthly limits, no credit card required.
             </div>
             <SignInButton mode="modal">
               <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 12 }}>
