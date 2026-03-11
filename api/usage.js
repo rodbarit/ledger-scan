@@ -1,5 +1,5 @@
 // api/usage.js — LedgerScan admin usage stats
-// Required env vars: KV_REST_API_URL, KV_REST_API_TOKEN, ADMIN_USER_ID
+// Required env vars: KV_REST_API_URL, KV_REST_API_TOKEN, ADMIN_USER_ID, CLERK_SECRET_KEY
 import { kv } from "@vercel/kv";
 
 async function verifyClerkToken(token) {
@@ -17,6 +17,24 @@ async function verifyClerkToken(token) {
   }
 }
 
+async function getAllClerkUsers() {
+  const users = [];
+  let offset = 0;
+  const limit = 100;
+  while (true) {
+    const res = await fetch(`https://api.clerk.com/v1/users?limit=${limit}&offset=${offset}`, {
+      headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` }
+    });
+    if (!res.ok) break;
+    const batch = await res.json();
+    if (!batch.length) break;
+    users.push(...batch);
+    if (batch.length < limit) break;
+    offset += limit;
+  }
+  return users;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -31,13 +49,37 @@ export default async function handler(req, res) {
   }
 
   try {
-    const keys = await kv.keys("user:*:scans");
+    const month = new Date().toISOString().slice(0, 7);
 
+    // Get all Clerk users and KV data in parallel
+    const [clerkUsers, kvKeys] = await Promise.all([
+      getAllClerkUsers(),
+      kv.keys("user:*:scans"),
+    ]);
+
+    // Build set of userIds that have KV scan data
+    const kvUserIds = new Set(kvKeys.map(k => k.split(":")[1]));
+
+    // Merge: start from Clerk users (source of truth), enrich with KV data
     const users = await Promise.all(
-      keys.map(async (key) => {
-        const userId = key.split(":")[1];
-        const month = new Date().toISOString().slice(0, 7);
-        const [scans, inputTokens, outputTokens, costMicro, costPhpCentavos, monthlyScans, tier, email] = await Promise.all([
+      clerkUsers.map(async (cu) => {
+        const userId = cu.id;
+        const email = cu.email_addresses?.[0]?.email_address || null;
+        const createdAt = cu.created_at ? new Date(cu.created_at).toISOString().slice(0, 10) : null;
+
+        if (!kvUserIds.has(userId)) {
+          // Signed up but never scanned — fetch only tier
+          const tier = await kv.get(`user:${userId}:tier`);
+          return {
+            userId, email, createdAt,
+            tier: tier || "free",
+            scans: 0, scansThisMonth: 0,
+            tokens: { input: 0, output: 0, total: 0 },
+            cost: { usd: "0.000000", php: "0.00" },
+          };
+        }
+
+        const [scans, inputTokens, outputTokens, costMicro, costPhpCentavos, monthlyScans, tier] = await Promise.all([
           kv.get(`user:${userId}:scans`),
           kv.get(`user:${userId}:tokens:input`),
           kv.get(`user:${userId}:tokens:output`),
@@ -45,11 +87,10 @@ export default async function handler(req, res) {
           kv.get(`user:${userId}:cost:php_centavos`),
           kv.get(`user:${userId}:scans:${month}`),
           kv.get(`user:${userId}:tier`),
-          kv.get(`user:${userId}:email`),
         ]);
+
         return {
-          userId,
-          email: email || null,
+          userId, email, createdAt,
           tier: tier || "free",
           scans: scans || 0,
           scansThisMonth: monthlyScans || 0,

@@ -1183,7 +1183,7 @@ function Dashboard() {
       {/* Admin panel */}
       {showAdmin && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
-          <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 800, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 1000, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid #e5e2de" }}>
               <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 700, color: "#1a1a2e" }}>Admin — Usage Stats</div>
               <button onClick={() => setShowAdmin(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#999" }}>×</button>
@@ -1213,7 +1213,7 @@ function Dashboard() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, whiteSpace: "nowrap" }}>
                     <thead>
                       <tr style={{ background: "#f8f7f5" }}>
-                        {["Email", "Plan", "Scans / Limit", "This Month", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
+                        {["Email", "Signed Up", "Plan", "Scans / Limit", "This Month", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
                           <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
                         ))}
                       </tr>
@@ -1225,6 +1225,7 @@ function Dashboard() {
                             <div>{u.email || <span style={{ color: "#ccc", fontStyle: "italic" }}>unknown</span>}</div>
                             <div style={{ color: "#aaa", fontFamily: "monospace", fontSize: 10 }}>{u.userId.slice(0, 20)}…</div>
                           </td>
+                          <td style={{ padding: "9px 14px", color: "#888", fontSize: 11 }}>{u.createdAt || "—"}</td>
                           <td style={{ padding: "9px 14px" }}>
                             <button
                               onClick={() => cycleTier(u.userId, u.tier)}
