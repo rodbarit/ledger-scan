@@ -1305,8 +1305,13 @@ function Dashboard() {
               Sign up for free and get <strong>100 scans</strong> — no monthly limits, no credit card required.
             </div>
             <SignInButton mode="modal">
-              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 12 }}>
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 10 }}>
                 Sign Up — It's Free
+              </button>
+            </SignInButton>
+            <SignInButton mode="modal">
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "1.5px solid #e5e2de", background: "#fff", color: "#1a1a2e", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 12 }}>
+                Already have an account? Sign In
               </button>
             </SignInButton>
             <button onClick={() => setShowSignUp(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
