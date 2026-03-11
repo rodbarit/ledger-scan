@@ -583,7 +583,10 @@ function BizCodeScreen({ onConfirm }) {
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
           {user
             ? <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>
-            : <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
+            : <><SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
+                <span style={{ color: "#ccc", margin: "0 6px" }}>·</span>
+                <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign in</button></SignInButton>
+              </>
           }
         </div>
       </div>
