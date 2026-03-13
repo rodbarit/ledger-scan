@@ -1311,7 +1311,7 @@ function Dashboard({ onBack }) {
               You've used your {FREE_SCAN_LIMIT} free scans
             </div>
             <div style={{ fontSize: 13, color: "#888", marginBottom: 28, lineHeight: 1.6 }}>
-              Sign up for free and get <strong>100 scans</strong> — no monthly limits, no credit card required.
+              Sign up for free and get <strong>100 scans</strong> on us — no credit card required.
             </div>
             <SignInButton mode="modal">
               <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 10 }}>
@@ -1901,7 +1901,7 @@ function Form2307Dashboard({ onBack }) {
           <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>You've used your {FREE_SCAN_LIMIT} free scans</div>
-            <div style={{ fontSize: 13, color: "#888", marginBottom: 28, lineHeight: 1.6 }}>Sign up for free and get <strong>100 scans</strong> — no monthly limits, no credit card required.</div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 28, lineHeight: 1.6 }}>Sign up for free and get <strong>100 scans</strong> on us — no credit card required.</div>
             <SignInButton mode="modal">
               <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 10 }}>Sign Up — It's Free</button>
             </SignInButton>
