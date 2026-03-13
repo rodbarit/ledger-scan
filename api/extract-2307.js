@@ -63,9 +63,9 @@ Analyze the form image and return ONLY a valid JSON object with these exact keys
 - "periodFrom": the "Period From" date in YYYY-MM-DD format (start of the quarter covered)
 - "periodTo": the "Period To" date in YYYY-MM-DD format (end of the quarter covered)
 - "payeeTin": always return ""
-- "payeeName": the actual name written or typed directly below the printed label "Payee's Name" — this is the company or individual name filled in on the form. Do NOT return a label, heading, or checkbox description.
+- "payeeName": the actual company or individual name filled into the "Payee's Name" field. This will be a proper name (e.g. "Hazareno Architecture and Design Inc.", "Juan dela Cruz"). Do NOT return any pre-printed label, heading, checkbox description, or classification text found elsewhere on the form.
 - "payorTin": always return ""
-- "payorName": the actual name written or typed directly below the printed label "Withholding Agent's/Payor's Name" — this is the company or individual name filled in on the form. Do NOT return checkbox labels, taxpayer classifications, or category descriptions (e.g. "Top 5,000 Individual", "Top 1,000 Private Corporations", "Government", "Large Taxpayer" are classifications — not names).
+- "payorName": the actual company or individual name filled into the "Withholding Agent's/Payor's Name" field. This will be a proper name (e.g. "MERALCO", "SM Prime Holdings Inc."). The form also contains a separate "Classification" section with pre-printed checkbox options — NEVER return any of these as the name: "Government", "Top 5,000 Individual", "Top 10,000 Corporation", "Top 1,000 Private Corporations", "Large Taxpayer", "Others", or any similar classification label.
 - "atcCode": the Alphanumeric Tax Code (ATC) shown on the form, e.g. "WC160"
 - "month1Income": the income payment amount for the 1st month of the quarter (numeric string only, no currency symbol or commas, e.g. "33464.51"). Use "" if blank.
 - "month2Income": the income payment amount for the 2nd month of the quarter. Use "" if blank.
