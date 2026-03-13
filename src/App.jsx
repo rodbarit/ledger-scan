@@ -371,7 +371,7 @@ function FieldInput({ field, value, onChange, accentColor }) {
       <input
         value={value || ""}
         onChange={e => onChange(e.target.value)}
-        placeholder={field.placeholder || (field.ai ? "extracted from receipt" : "enter manually")}
+        placeholder={field.placeholder || (field.ai ? "" : "enter manually")}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={{
@@ -1775,7 +1775,7 @@ function Form2307Dashboard({ onBack }) {
                     {FORM2307_FIELDS.map(f => (
                       <FieldInput
                         key={f.key}
-                        field={{ ...f, ai: true, placeholder: "extracted from form" }}
+                        field={{ ...f, ai: true }}
                         value={form.data[f.key]}
                         onChange={v => updateField(form.id, f.key, v)}
                         accentColor="#2a5298"
