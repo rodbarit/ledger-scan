@@ -62,10 +62,10 @@ Analyze the form image and return ONLY a valid JSON object with these exact keys
 
 - "periodFrom": the "Period From" date in YYYY-MM-DD format (start of the quarter covered)
 - "periodTo": the "Period To" date in YYYY-MM-DD format (end of the quarter covered)
-- "payeeTin": the TIN of the payee (the one receiving the payment), including branch code if shown, e.g. "111-111-111-000"
-- "payeeName": the full name of the payee (company or individual)
-- "payorTin": the TIN of the withholding agent/payor, including branch code if shown
-- "payorName": the full name of the withholding agent/payor
+- "payeeTin": always return ""
+- "payeeName": the actual name written or typed directly below the printed label "Payee's Name" — this is the company or individual name filled in on the form. Do NOT return a label, heading, or checkbox description.
+- "payorTin": always return ""
+- "payorName": the actual name written or typed directly below the printed label "Withholding Agent's/Payor's Name" — this is the company or individual name filled in on the form. Do NOT return checkbox labels, taxpayer classifications, or category descriptions (e.g. "Top 5,000 Individual", "Top 1,000 Private Corporations", "Government", "Large Taxpayer" are classifications — not names).
 - "atcCode": the Alphanumeric Tax Code (ATC) shown on the form, e.g. "WC160"
 - "month1Income": the income payment amount for the 1st month of the quarter (numeric string only, no currency symbol or commas, e.g. "33464.51"). Use "" if blank.
 - "month2Income": the income payment amount for the 2nd month of the quarter. Use "" if blank.
