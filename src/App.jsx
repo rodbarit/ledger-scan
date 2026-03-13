@@ -504,12 +504,6 @@ function BizCodeScreen({ onConfirm, onBack }) {
         }
       `}</style>
       <div className="biz-screen-width">
-        {!user && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 20 }}>
-            <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
-            <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Already have an account? Sign in</button></SignInButton>
-          </div>
-        )}
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
           <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Receipt Processing</div>
