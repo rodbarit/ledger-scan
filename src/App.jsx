@@ -583,10 +583,10 @@ function BizCodeScreen({ onConfirm }) {
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
           {user
             ? <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>
-            : <><SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
-                <span style={{ color: "#ccc", margin: "0 6px" }}>·</span>
-                <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign in</button></SignInButton>
-              </>
+            : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
+                <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Already have an account? Sign in</button></SignInButton>
+              </div>
           }
         </div>
       </div>
@@ -1327,7 +1327,584 @@ function Dashboard() {
   );
 }
 
+// ── Form 2307 CSV ──────────────────────────────────────────────────────────
+function to2307CSV(rows) {
+  const header = [
+    "Number", "Period From", "Period To", "TIN of Payee", "Payee",
+    "TIN of Payor", "Payor", "ATC Code",
+    "Month 1 Income", "Month 2 Income", "Month 3 Income", "Total",
+    "Tax Withheld for the Quarter"
+  ];
+  const q = v => `"${(v || "").replace(/"/g, '""')}"`;
+  const lines = [
+    header.join(","),
+    ...rows.map((r, i) => [
+      i + 1,
+      q(r.data.periodFrom), q(r.data.periodTo),
+      q(r.data.payeeTin), q(r.data.payeeName),
+      q(r.data.payorTin), q(r.data.payorName),
+      q(r.data.atcCode),
+      q(r.data.month1Income), q(r.data.month2Income), q(r.data.month3Income),
+      q(r.data.total), q(r.data.taxWithheld)
+    ].join(","))
+  ];
+  return lines.join("\n");
+}
+
+// ── Form 2307 PDF ──────────────────────────────────────────────────────────
+async function generate2307PDF(forms, filename) {
+  if (!window.jspdf) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = 210, pageH = 297, margin = 10;
+  const exportDate = new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+  for (let i = 0; i < forms.length; i++) {
+    if (i > 0) pdf.addPage();
+    const form = forms[i];
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Form 2307 — Page ${i + 1} of ${forms.length}`, margin, margin + 6);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Exported: ${exportDate}`, pageW - margin, margin + 6, { align: "right" });
+    pdf.setDrawColor(0);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, margin + 10, pageW - margin, margin + 10);
+    if (form.preview) {
+      try {
+        const imgData = await getImageDataURL(form.preview, form.file?.type || "image/jpeg");
+        const imgFormat = (form.file?.type || "").includes("png") ? "PNG" : "JPEG";
+        const imgY = margin + 14;
+        const imgH = pageH - imgY - margin;
+        pdf.addImage(imgData, imgFormat, margin, imgY, pageW - margin * 2, imgH, "", "FAST");
+      } catch {}
+    }
+  }
+  const blob = new Blob([pdf.output("arraybuffer")], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  window.open(url, "_blank");
+}
+
+// ── Module Picker ──────────────────────────────────────────────────────────
+function ModulePickerScreen({ onSelect }) {
+  return (
+    <div style={{
+      minHeight: "100vh", background: "#f4f3f0",
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Lato', sans-serif"
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
+        <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Select Module</div>
+      </div>
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", padding: "0 16px" }}>
+        {[
+          { id: "receipts",  icon: "🧾", title: "Receipts",   desc: "Extract data from expense & sales receipts" },
+          { id: "form2307",  icon: "📋", title: "Form 2307",  desc: "Extract withholding tax certificate data" },
+        ].map(m => (
+          <button
+            key={m.id}
+            onClick={() => onSelect(m.id)}
+            style={{
+              width: 220, padding: "32px 24px", borderRadius: 12, border: "1.5px solid #e5e2de",
+              background: "#fff", cursor: "pointer", textAlign: "center", fontFamily: "inherit",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.06)", transition: "all 0.2s"
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#2a5298"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(42,82,152,0.15)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#e5e2de"; e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.06)"; }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 14 }}>{m.icon}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>{m.title}</div>
+            <div style={{ fontSize: 12, color: "#999", lineHeight: 1.5 }}>{m.desc}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Form 2307 Dashboard ────────────────────────────────────────────────────
+const FORM2307_FIELDS = [
+  { key: "periodFrom",   label: "Period From" },
+  { key: "periodTo",     label: "Period To" },
+  { key: "payeeTin",     label: "TIN of Payee" },
+  { key: "payeeName",    label: "Payee" },
+  { key: "payorTin",     label: "TIN of Payor" },
+  { key: "payorName",    label: "Payor" },
+  { key: "atcCode",      label: "ATC Code" },
+  { key: "month1Income", label: "Month 1 Income" },
+  { key: "month2Income", label: "Month 2 Income" },
+  { key: "month3Income", label: "Month 3 Income" },
+  { key: "total",        label: "Total" },
+  { key: "taxWithheld",  label: "Tax Withheld for the Quarter" },
+];
+const EMPTY_2307 = () => Object.fromEntries(FORM2307_FIELDS.map(f => [f.key, ""]));
+
+function Form2307Dashboard({ onBack }) {
+  const { isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
+  const [forms, setForms] = useState([]);
+  const [dragging, setDragging] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+  const [globalError, setGlobalError] = useState(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
+  const [userStats, setUserStats] = useState(null);
+  const [freeScans, setFreeScans] = useState(() => parseInt(localStorage.getItem("freeScans") || "0"));
+  const fileRef = useRef();
+
+  const UPGRADE_URL = "https://forms.gle/ugu9Fe1aFGTNVaMk7";
+  const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
+
+  const fetchUserStats = useCallback(async () => {
+    if (!isSignedIn) return;
+    try {
+      const token = await getToken() ?? "";
+      const res = await fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setUserStats(await res.json());
+    } catch {}
+  }, [isSignedIn, getToken]);
+
+  useEffect(() => { fetchUserStats(); }, [fetchUserStats]);
+
+  const processFiles = async (files) => {
+    if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) { setShowSignUp(true); return; }
+    setGlobalError(null);
+    const newItems = Array.from(files).map(f => ({
+      id: Math.random().toString(36).slice(2),
+      file: f, preview: URL.createObjectURL(f),
+      status: "pending", error: null, data: EMPTY_2307()
+    }));
+    setForms(prev => [...prev, ...newItems]);
+    const token = await getToken() ?? "";
+    for (const item of newItems) {
+      if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
+        setShowSignUp(true);
+        setForms(prev => prev.filter(f => f.id !== item.id));
+        break;
+      }
+      setForms(prev => prev.map(f => f.id === item.id ? { ...f, status: "processing" } : f));
+      try {
+        const base64 = await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result.split(",")[1]);
+          reader.onerror = rej;
+          reader.readAsDataURL(item.file);
+        });
+        const userEmail = user?.emailAddresses?.[0]?.emailAddress || null;
+        const response = await fetch("/api/extract-2307", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ base64, mediaType: item.file.type || "image/jpeg", userEmail })
+        });
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error || "Extraction failed");
+        const extracted = { ...json.data };
+        if (extracted.payeeName) extracted.payeeName = toTitleCase(extracted.payeeName);
+        if (extracted.payorName) extracted.payorName = toTitleCase(extracted.payorName);
+        if (!isSignedIn) {
+          const next = freeScans + 1;
+          localStorage.setItem("freeScans", next);
+          setFreeScans(next);
+        } else {
+          fetchUserStats();
+        }
+        setForms(prev => prev.map(f => f.id === item.id
+          ? { ...f, status: "done", data: { ...EMPTY_2307(), ...extracted } } : f));
+      } catch (e) {
+        if (e.message?.toLowerCase().includes("limit")) {
+          if (isSignedIn) setShowUpgrade(true);
+          else setShowSignUp(true);
+        }
+        setForms(prev => prev.map(f => f.id === item.id ? { ...f, status: "error", error: e.message } : f));
+      }
+    }
+  };
+
+  const onDrop = (e) => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); };
+  const removeForm = (id) => setForms(prev => prev.filter(f => f.id !== id));
+  const updateField = (id, key, value) =>
+    setForms(prev => prev.map(f => f.id === id ? { ...f, data: { ...f.data, [key]: value } } : f));
+
+  const done = forms.filter(f => f.status === "done");
+  const doneCount = done.length;
+  const processingCount = forms.filter(f => f.status === "processing").length;
+
+  const downloadCSV = () => {
+    if (!doneCount) return;
+    const csv = to2307CSV(done);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = buildFilename("2307", "csv");
+    a.click();
+  };
+
+  const downloadPDF = async () => {
+    if (!doneCount) return;
+    setGeneratingPDF(true);
+    try { await generate2307PDF(done, buildFilename("2307", "pdf")); }
+    catch (e) { setGlobalError("PDF generation failed. Please try again."); }
+    finally { setGeneratingPDF(false); }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f4f3f0", fontFamily: "'Lato', sans-serif", color: "#1a1a2e" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 2000,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: "95vw", maxHeight: "92vh" }}>
+            <img src={lightbox} alt="Form 2307" style={{
+              maxWidth: "100%", maxHeight: "88vh", borderRadius: 8,
+              boxShadow: "0 8px 40px rgba(0,0,0,0.5)", display: "block"
+            }} />
+            <button onClick={() => setLightbox(null)} style={{
+              position: "absolute", top: -14, right: -14, width: 32, height: 32,
+              borderRadius: "50%", background: "#fff", border: "none", fontSize: 18,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.3)", fontWeight: 700, color: "#333"
+            }}>×</button>
+          </div>
+        </div>
+      )}
+
+      {/* Top bar */}
+      <div className="topbar-pad" style={{
+        background: "#1a1a2e", color: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        height: 56, borderBottom: "3px solid #2a5298"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div className="topbar-brand" style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
+          <div style={{ width: 1, height: 20, background: "#2a5298" }} />
+          <div style={{ fontSize: 13, color: "#7eb8f7", fontWeight: 700, letterSpacing: "0.06em" }}>Form 2307</div>
+        </div>
+        <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {processingCount > 0 && (
+            <div style={{ fontSize: 12, color: "#7eb8f7", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span>
+              Processing {processingCount}...
+            </div>
+          )}
+          {forms.length > 0 && <span style={{ fontSize: 12, color: "#8899bb" }}>{doneCount}/{forms.length} ready</span>}
+          <button onClick={downloadPDF} disabled={doneCount === 0 || generatingPDF} style={{
+            background: doneCount > 0 && !generatingPDF ? "#c0392b" : "#2a3050",
+            color: doneCount > 0 && !generatingPDF ? "#fff" : "#4a5070",
+            border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12,
+            fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !generatingPDF ? "pointer" : "not-allowed",
+            letterSpacing: "0.06em", textTransform: "uppercase"
+          }}>{generatingPDF ? "⟳ Building..." : "↓ PDF"}</button>
+          <button onClick={downloadCSV} disabled={doneCount === 0} style={{
+            background: doneCount > 0 ? "#2a5298" : "#2a3050",
+            color: doneCount > 0 ? "#fff" : "#4a5070",
+            border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12,
+            fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed",
+            letterSpacing: "0.06em", textTransform: "uppercase"
+          }}>↓ CSV</button>
+          {isSignedIn
+            ? <>
+                {userStats && (
+                  <div style={{ fontSize: 11, color: "#8899bb", display: "flex", alignItems: "center", gap: 8 }}>
+                    {userStats.tier === "pro"
+                      ? <span style={{ color: "#fbbf24", fontWeight: 700 }}>Pro · Unlimited</span>
+                      : userStats.tier === "basic"
+                        ? <span style={{ color: userStats.scansLeft <= 20 ? "#f87171" : "#7eb8f7" }}>
+                            <strong style={{ color: userStats.scansLeft <= 20 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> scans left this month
+                          </span>
+                        : <span style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#7eb8f7" }}>
+                            <strong style={{ color: userStats.scansLeft <= 10 ? "#f87171" : "#fff" }}>{userStats.scansLeft}</strong> free scans left
+                          </span>
+                    }
+                    {userStats.tier !== "pro" && (
+                      <button onClick={() => setShowUpgrade(true)} style={{
+                        background: "#2a5298", color: "#fff", border: "none", borderRadius: 4,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+                      }}>Upgrade</button>
+                    )}
+                  </div>
+                )}
+                <UserMenu />
+              </>
+            : <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 11, color: freeScansLeft <= 1 ? "#f87171" : "#7eb8f7" }}>
+                  {freeScansLeft} free scan{freeScansLeft !== 1 ? "s" : ""} left
+                </span>
+                <SignInButton mode="modal">
+                  <button style={{ background: "#2a5298", color: "#fff", border: "none", borderRadius: 4, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                    Sign In
+                  </button>
+                </SignInButton>
+              </div>
+          }
+        </div>
+      </div>
+
+      {/* Sub-bar */}
+      <div className="subbar-pad" style={{ background: "#eeecea", borderBottom: "1px solid #dddad6", display: "flex", gap: 20, alignItems: "center", fontSize: 11 }}>
+        <span style={{ color: "#888" }}>Certificate of Creditable Withholding Tax at Source</span>
+        <button onClick={onBack} style={{
+          marginLeft: "auto", background: "none", border: "1px solid #ccc", borderRadius: 4,
+          padding: "3px 12px", fontSize: 11, color: "#888", cursor: "pointer"
+        }}>← Change Module</button>
+        <span className="subbar-right" style={{ color: "#aaa", fontSize: 11 }}>
+          {isSignedIn ? `Signed in as ${user?.emailAddresses?.[0]?.emailAddress}` : "Guest session"}
+        </span>
+      </div>
+
+      <div className="page-pad" style={{ maxWidth: 1300, margin: "0 auto" }}>
+        {globalError && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#b91c1c", display: "flex", justifyContent: "space-between" }}>
+            <span>⚠ {globalError}</span>
+            <button onClick={() => setGlobalError(null)} style={{ background: "none", border: "none", color: "#b91c1c", cursor: "pointer" }}>×</button>
+          </div>
+        )}
+
+        {/* Upload zone */}
+        <div
+          onDrop={onDrop}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onClick={() => fileRef.current.click()}
+          className="upload-zone"
+          style={{
+            border: `2px dashed ${dragging ? "#2a5298" : "#c8c4be"}`,
+            background: dragging ? "#eef3fb" : "#fff"
+          }}
+        >
+          <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 600, marginBottom: 6 }}>Upload Form 2307 Images</div>
+          <div style={{ fontSize: 12, color: "#999" }}>Drag & drop or click to browse · JPG, PNG, WEBP · Multiple files</div>
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => processFiles(e.target.files)} />
+        </div>
+
+        {forms.length === 0 && (
+          <div style={{ textAlign: "center", color: "#bbb", fontSize: 13, marginTop: 40, fontStyle: "italic" }}>
+            No forms uploaded yet.
+          </div>
+        )}
+
+        {forms.map((form) => {
+          const statusStyles = {
+            pending:    { bg: "#f3f4f6", color: "#6b7280", label: "Queued" },
+            processing: { bg: "#eff6ff", color: "#2a5298", label: "Scanning..." },
+            done:       { bg: "#f0fdf4", color: "#15803d", label: "Complete" },
+            error:      { bg: "#fef2f2", color: "#b91c1c", label: "Error" },
+          }[form.status];
+          return (
+            <div key={form.id} style={{
+              background: "#fff", borderRadius: 8, marginBottom: 12,
+              border: "1px solid #e5e2de", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden"
+            }}>
+              <div className="card-row" style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px" }}>
+                <img
+                  src={form.preview} alt=""
+                  onClick={() => setLightbox(form.preview)}
+                  style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid #e5e2de", flexShrink: 0, cursor: "zoom-in" }}
+                  title="Tap to view form"
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e", marginBottom: 2 }}>
+                    {form.data.payeeName || form.data.payorName || form.file.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#999", display: "flex", gap: 16 }}>
+                    {form.data.periodFrom && <span>📅 {form.data.periodFrom} – {form.data.periodTo}</span>}
+                    {form.data.atcCode && <span>🏷 {form.data.atcCode}</span>}
+                    {form.data.taxWithheld && <span>💰 {form.data.taxWithheld}</span>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, fontWeight: 700, background: statusStyles.bg, color: statusStyles.color, letterSpacing: "0.05em", textTransform: "uppercase" }}>{statusStyles.label}</span>
+                  {form.status === "error" && <span style={{ fontSize: 11, color: "#b91c1c" }}>{form.error}</span>}
+                  <button onClick={() => removeForm(form.id)} style={{ background: "none", border: "1px solid #e5e2de", color: "#bbb", cursor: "pointer", fontSize: 14, borderRadius: 4, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#fca5a5"; e.currentTarget.style.color = "#b91c1c"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "#e5e2de"; e.currentTarget.style.color = "#bbb"; }}
+                  >×</button>
+                </div>
+              </div>
+              {form.status === "processing" && (
+                <div className="card-body" style={{ borderTop: "1px solid #f0ece8" }}>
+                  <div className="fields-grid">
+                    {FORM2307_FIELDS.map(f => (
+                      <div key={f.key}>
+                        <div style={{ height: 10, width: "40%", background: "#f0f0f0", borderRadius: 3, marginBottom: 8 }} />
+                        <div style={{ height: 36, background: "linear-gradient(90deg,#f0f0f0,#e8e8e8,#f0f0f0)", backgroundSize: "200% 100%", borderRadius: 4, animation: "shimmer 1.5s infinite" }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {form.status === "done" && (
+                <div className="card-body" style={{ borderTop: "1px solid #f0ece8" }}>
+                  <div className="fields-grid">
+                    {FORM2307_FIELDS.map(f => (
+                      <FieldInput
+                        key={f.key}
+                        field={{ ...f, ai: true }}
+                        value={form.data[f.key]}
+                        onChange={v => updateField(form.id, f.key, v)}
+                        accentColor="#2a5298"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {forms.length > 0 && (
+          <div className="export-bar" style={{ marginTop: 20, background: "#fff", borderRadius: 8, border: "1px solid #e5e2de", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px" }}>
+            <div style={{ fontSize: 13, color: "#666" }}>
+              <strong style={{ color: "#1a1a2e" }}>{doneCount}</strong> of <strong style={{ color: "#1a1a2e" }}>{forms.length}</strong> forms processed
+              {doneCount > 0 && <span style={{ marginLeft: 16, color: "#15803d" }}>✓ Ready to export</span>}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={downloadPDF} disabled={doneCount === 0 || generatingPDF} style={{ background: doneCount > 0 && !generatingPDF ? "#c0392b" : "#f3f4f6", color: doneCount > 0 && !generatingPDF ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 && !generatingPDF ? "pointer" : "not-allowed" }}>
+                {generatingPDF ? "⟳ Building..." : "↓ Download PDF"}
+              </button>
+              <button onClick={downloadCSV} disabled={doneCount === 0} style={{ background: doneCount > 0 ? "#1a1a2e" : "#f3f4f6", color: doneCount > 0 ? "#fff" : "#9ca3af", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontFamily: "inherit", fontWeight: 700, cursor: doneCount > 0 ? "pointer" : "not-allowed" }}>
+                ↓ Download CSV
+              </button>
+            </div>
+          </div>
+        )}
+
+        {doneCount > 0 && (
+          <div style={{ marginTop: 24, background: "#fff", borderRadius: 8, border: "1px solid #e5e2de", overflow: "hidden" }}>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid #f0ece8", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#666" }}>Data Preview</span>
+              <span style={{ fontSize: 11, color: "#aaa" }}>— {doneCount} row{doneCount !== 1 ? "s" : ""}</span>
+            </div>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                <thead>
+                  <tr style={{ background: "#f8f7f5" }}>
+                    {["#", "Period From", "Period To", "TIN of Payee", "Payee", "TIN of Payor", "Payor", "ATC Code", "Month 1", "Month 2", "Month 3", "Total", "Tax Withheld"].map(h => (
+                      <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {done.map((f, i) => (
+                    <tr key={f.id} style={{ borderBottom: "1px solid #f0ece8", background: i % 2 === 0 ? "#fff" : "#fafaf9" }}>
+                      {[
+                        i + 1, f.data.periodFrom, f.data.periodTo,
+                        f.data.payeeTin, f.data.payeeName,
+                        f.data.payorTin, f.data.payorName,
+                        f.data.atcCode,
+                        f.data.month1Income, f.data.month2Income, f.data.month3Income,
+                        f.data.total, f.data.taxWithheld
+                      ].map((v, ci) => (
+                        <td key={ci} style={{ padding: "7px 12px", color: v ? "#1a1a2e" : "#ccc", fontSize: 12 }}>{v || "—"}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
+        @keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+        * { box-sizing: border-box; }
+        input::placeholder { color: #ccc; }
+        .fields-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .page-pad { padding: 28px 40px; }
+        .topbar-pad { padding: 0 40px; }
+        .subbar-pad { padding: 8px 40px; }
+        .card-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; }
+        .card-body { padding: 20px 24px; }
+        .upload-zone { border-radius: 8px; padding: 36px; text-align: center; cursor: pointer; margin-bottom: 28px; transition: all 0.2s; }
+        @media (max-width: 640px) {
+          .fields-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+          .page-pad { padding: 16px !important; }
+          .topbar-pad { padding: 0 16px !important; height: auto !important; flex-wrap: wrap; gap: 8px; padding-top: 10px !important; padding-bottom: 10px !important; }
+          .subbar-pad { padding: 8px 16px !important; flex-wrap: wrap; gap: 8px; }
+          .card-row { padding: 12px 14px !important; gap: 10px !important; }
+          .card-body { padding: 14px 14px !important; }
+          .upload-zone { padding: 24px 16px !important; margin-bottom: 16px !important; }
+          .topbar-actions { flex-wrap: wrap; gap: 8px !important; justify-content: flex-end; }
+          .topbar-brand { font-size: 16px !important; }
+          .subbar-right { display: none !important; }
+        }
+      `}</style>
+
+      {/* Upgrade modal */}
+      {showUpgrade && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 440, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🚀</div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>Upgrade LedgerScan</div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 24, lineHeight: 1.6 }}>Choose a plan and pay via GCash. We'll upgrade your account within the day.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24, textAlign: "left" }}>
+              {[
+                { name: "Basic", price: "₱499/mo", limit: "200 scans/month", color: "#2a5298", bg: "#eff6ff" },
+                { name: "Pro", price: "₱999/mo", limit: "Unlimited scans", color: "#b45309", bg: "#fef3c7" },
+              ].map(p => (
+                <div key={p.name} style={{ border: `1.5px solid ${p.color}44`, borderRadius: 10, padding: "14px 16px", background: p.bg }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: p.color, marginBottom: 4 }}>{p.name}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a2e", marginBottom: 4 }}>{p.price}</div>
+                  <div style={{ fontSize: 11, color: "#666" }}>{p.limit}</div>
+                </div>
+              ))}
+            </div>
+            <a href={UPGRADE_URL} target="_blank" rel="noreferrer" style={{ display: "block", width: "100%", marginBottom: 12 }}>
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em" }}>Upgrade Now →</button>
+            </a>
+            <button onClick={() => setShowUpgrade(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Maybe later</button>
+          </div>
+        </div>
+      )}
+
+      {/* Sign-up modal */}
+      {showSignUp && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 40, maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>You've used your {FREE_SCAN_LIMIT} free scans</div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 28, lineHeight: 1.6 }}>Sign up for free and get <strong>100 scans</strong> — no monthly limits, no credit card required.</div>
+            <SignInButton mode="modal">
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none", background: "#1a1a2e", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 10 }}>Sign Up — It's Free</button>
+            </SignInButton>
+            <SignInButton mode="modal">
+              <button style={{ width: "100%", padding: "13px", borderRadius: 8, border: "1.5px solid #e5e2de", background: "#fff", color: "#1a1a2e", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em", marginBottom: 12 }}>Already have an account? Sign In</button>
+            </SignInButton>
+            <button onClick={() => setShowSignUp(false)} style={{ background: "none", border: "none", color: "#aaa", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Maybe later</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Root ────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [module, setModule] = useState(null);
+  if (!module) return <ModulePickerScreen onSelect={setModule} />;
+  if (module === "form2307") return <Form2307Dashboard onBack={() => setModule(null)} />;
   return <Dashboard />;
 }
