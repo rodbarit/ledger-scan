@@ -493,10 +493,17 @@ function BizCodeScreen({ onConfirm, onBack }) {
     <div style={{
       minHeight: "100vh", background: "#f4f3f0",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      fontFamily: "'Lato', sans-serif"
+      fontFamily: "'Lato', sans-serif", padding: "24px 16px", boxSizing: "border-box"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
-      <div style={{ width: 400 }} className="biz-screen-width">
+      <style>{`
+        .biz-screen-width { width: 400px; }
+        @media (max-width: 480px) {
+          .biz-screen-width { width: 100% !important; }
+          .biz-card-padding { padding: 24px 20px !important; }
+        }
+      `}</style>
+      <div className="biz-screen-width">
         {!user && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 20 }}>
             <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
@@ -508,7 +515,7 @@ function BizCodeScreen({ onConfirm, onBack }) {
           <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Receipt Processing</div>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 12, padding: 36, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid #e5e2de" }}>
+        <div className="biz-card-padding" style={{ background: "#fff", borderRadius: 12, padding: 36, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid #e5e2de" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a2e", marginBottom: 6 }}>Enter Business Code</div>
           <div style={{ fontSize: 13, color: "#888", marginBottom: 24, lineHeight: 1.5 }}>
             All receipts in this session will be filed under this business code.
@@ -1410,14 +1417,22 @@ function ModulePickerScreen({ onSelect }) {
     <div style={{
       minHeight: "100vh", background: "#f4f3f0",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      fontFamily: "'Lato', sans-serif"
+      fontFamily: "'Lato', sans-serif", padding: "24px 16px", boxSizing: "border-box"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+      <style>{`
+        .module-cards { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; width: 100%; max-width: 480px; }
+        .module-card { width: 220px; }
+        @media (max-width: 480px) {
+          .module-cards { flex-direction: column; align-items: stretch; }
+          .module-card { width: 100% !important; }
+        }
+      `}</style>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
         <div style={{ fontSize: 12, color: "#999", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>Select Module</div>
       </div>
-      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", padding: "0 16px" }}>
+      <div className="module-cards">
         {[
           { id: "receipts",  icon: "🧾", title: "Receipts",   desc: "Extract data from expense & sales receipts" },
           { id: "form2307",  icon: "📋", title: "Form 2307",  desc: "Extract withholding tax certificate data" },
@@ -1425,8 +1440,9 @@ function ModulePickerScreen({ onSelect }) {
           <button
             key={m.id}
             onClick={() => onSelect(m.id)}
+            className="module-card"
             style={{
-              width: 220, padding: "32px 24px", borderRadius: 12, border: "1.5px solid #e5e2de",
+              padding: "32px 24px", borderRadius: 12, border: "1.5px solid #e5e2de",
               background: "#fff", cursor: "pointer", textAlign: "center", fontFamily: "inherit",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)", transition: "all 0.2s"
             }}
