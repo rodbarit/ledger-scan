@@ -581,18 +581,18 @@ function BizCodeScreen({ onConfirm, onBack }) {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
+          {!user && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
+              <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Already have an account? Sign in</button></SignInButton>
+            </div>
+          )}
+          {user && <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>}
           {onBack && (
-            <button onClick={onBack} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0, marginBottom: 10, display: "block", width: "100%", textAlign: "center" }}>
+            <button onClick={onBack} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0, marginTop: 10, display: "block", width: "100%", textAlign: "center" }}>
               ← Back to Module Picker
             </button>
           )}
-          {user
-            ? <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>
-            : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#2a5298", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign up — get 100 free scans</button></SignInButton>
-                <SignInButton mode="modal"><button style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Already have an account? Sign in</button></SignInButton>
-              </div>
-          }
         </div>
       </div>
     </div>
