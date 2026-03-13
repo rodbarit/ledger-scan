@@ -482,7 +482,7 @@ function UserMenu() {
 }
 
 // ── Business Code entry screen ─────────────────────────────────────────────
-function BizCodeScreen({ onConfirm }) {
+function BizCodeScreen({ onConfirm, onBack }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [value, setValue] = useState("");
@@ -581,6 +581,11 @@ function BizCodeScreen({ onConfirm }) {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#aaa" }}>
+          {onBack && (
+            <button onClick={onBack} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0, marginBottom: 10, display: "block", width: "100%", textAlign: "center" }}>
+              ← Back to Module Picker
+            </button>
+          )}
           {user
             ? <>{user.emailAddresses?.[0]?.emailAddress} · <button onClick={() => signOut()} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 12, textDecoration: "underline", padding: 0 }}>Sign out</button></>
             : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
@@ -595,7 +600,7 @@ function BizCodeScreen({ onConfirm }) {
 }
 
 // ── Main app ───────────────────────────────────────────────────────────────
-function Dashboard() {
+function Dashboard({ onBack }) {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const [bizCode, setBizCode] = useState("");
@@ -681,7 +686,7 @@ function Dashboard() {
   const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
 
   // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} />;
+  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} onBack={onBack} />;
 
   const processFiles = async (files) => {
     if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
@@ -1906,5 +1911,5 @@ export default function App() {
   const [module, setModule] = useState(null);
   if (!module) return <ModulePickerScreen onSelect={setModule} />;
   if (module === "form2307") return <Form2307Dashboard onBack={() => setModule(null)} />;
-  return <Dashboard />;
+  return <Dashboard onBack={() => setModule(null)} />;
 }
