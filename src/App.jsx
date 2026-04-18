@@ -659,6 +659,7 @@ function BizCodeScreen({ onConfirm, activeTab, onTabChange }) {
           )}
         </div>
       </div>
+      </div>
     </div>
   );
 }
