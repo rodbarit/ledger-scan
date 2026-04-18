@@ -1,6 +1,6 @@
 // api/extract-2307.js — LedgerScan Form 2307 extraction
 // Required env vars: ANTHROPIC_API_KEY, CLERK_SECRET_KEY, KV_REST_API_URL, KV_REST_API_TOKEN
-import { kv } from "@vercel/kv";
+import { kv } from "./_kv.js";
 
 async function verifyClerkToken(token) {
   if (!token) return null;

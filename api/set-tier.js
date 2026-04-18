@@ -1,6 +1,6 @@
 // api/set-tier.js — Set user tier (free / basic / pro)
 // Required env vars: KV_REST_API_URL, KV_REST_API_TOKEN, ADMIN_USER_ID
-import { kv } from "@vercel/kv";
+import { kv } from "./_kv.js";
 
 async function verifyClerkToken(token) {
   if (!token) return null;

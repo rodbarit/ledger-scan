@@ -481,8 +481,53 @@ function UserMenu() {
   );
 }
 
+// ── Shared tab nav ──────────────────────────────────────────────────────────
+const APP_TABS = [
+  { id: "receipts", label: "Receipts" },
+  { id: "form2307", label: "Form 2307" },
+];
+
+function AppTabs({ activeTab, onTabChange, variant = "dark" }) {
+  const isDark = variant === "dark";
+  return (
+    <div className="app-tabs" style={{ display: "flex", gap: 2, alignItems: "center" }}>
+      {APP_TABS.map(t => {
+        const active = t.id === activeTab;
+        return (
+          <button
+            key={t.id}
+            onClick={() => !active && onTabChange(t.id)}
+            style={{
+              background: active
+                ? (isDark ? "rgba(126,184,247,0.15)" : "#1a1a2e")
+                : "transparent",
+              color: active
+                ? (isDark ? "#fff" : "#fff")
+                : (isDark ? "#8899bb" : "#888"),
+              border: "none",
+              borderBottom: isDark
+                ? `2px solid ${active ? "#7eb8f7" : "transparent"}`
+                : "none",
+              borderRadius: isDark ? 0 : 6,
+              padding: isDark ? "8px 14px" : "8px 16px",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              cursor: active ? "default" : "pointer",
+              fontFamily: "inherit",
+              transition: "all 0.15s",
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Business Code entry screen ─────────────────────────────────────────────
-function BizCodeScreen({ onConfirm, onBack }) {
+function BizCodeScreen({ onConfirm, activeTab, onTabChange }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [value, setValue] = useState("");
@@ -492,17 +537,35 @@ function BizCodeScreen({ onConfirm, onBack }) {
   return (
     <div style={{
       minHeight: "100vh", background: "#f4f3f0",
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      fontFamily: "'Lato', sans-serif", padding: "24px 16px", boxSizing: "border-box"
+      fontFamily: "'Lato', sans-serif", boxSizing: "border-box"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
       <style>{`
         .biz-screen-width { width: 400px; }
+        .biz-topbar { padding: 0 40px; }
         @media (max-width: 480px) {
           .biz-screen-width { width: 100% !important; }
           .biz-card-padding { padding: 24px 20px !important; }
+          .biz-topbar { padding: 0 16px !important; }
         }
       `}</style>
+
+      {/* Top bar with tabs */}
+      <div className="biz-topbar" style={{
+        background: "#1a1a2e", color: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        height: 56, borderBottom: "3px solid #2a5298"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
+          <AppTabs activeTab={activeTab} onTabChange={onTabChange} />
+        </div>
+      </div>
+
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        padding: "48px 16px 24px", minHeight: "calc(100vh - 56px)", boxSizing: "border-box"
+      }}>
       <div className="biz-screen-width">
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
@@ -621,6 +684,7 @@ function Dashboard({ onBack }) {
   const [freeScans, setFreeScans] = useState(() => parseInt(localStorage.getItem("freeScans") || "0"));
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminData, setAdminData] = useState(null);
+  const [adminError, setAdminError] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [userStats, setUserStats] = useState(null);
   const [settingTier, setSettingTier] = useState({});
@@ -671,13 +735,20 @@ function Dashboard({ onBack }) {
 
   const loadAdminData = async () => {
     setAdminLoading(true);
+    setAdminError(null);
+    setAdminData(null);
     try {
       const token = await getToken() ?? "";
       const res = await fetch("/api/usage", { headers: { Authorization: `Bearer ${token}` } });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.summary) {
+        setAdminError(`HTTP ${res.status} — ${json.error || res.statusText || "Unknown error"}`);
+        return;
+      }
       setAdminData(json);
     } catch (e) {
       console.error("Admin fetch error:", e);
+      setAdminError(e.message || "Network error");
     } finally {
       setAdminLoading(false);
     }
@@ -1199,6 +1270,15 @@ function Dashboard({ onBack }) {
             </div>
 
             {adminLoading && <div style={{ padding: 40, textAlign: "center", color: "#888" }}>Loading...</div>}
+
+            {!adminLoading && adminError && (
+              <div style={{ padding: 24 }}>
+                <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, padding: "12px 16px", fontSize: 13, color: "#b91c1c" }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Failed to load admin data</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 12 }}>{adminError}</div>
+                </div>
+              </div>
+            )}
 
             {!adminLoading && adminData && (
               <div style={{ padding: 24 }}>

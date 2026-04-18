@@ -1,6 +1,6 @@
 // api/usage.js — LedgerScan admin usage stats
 // Required env vars: KV_REST_API_URL, KV_REST_API_TOKEN, ADMIN_USER_ID, CLERK_SECRET_KEY
-import { kv } from "@vercel/kv";
+import { kv } from "./_kv.js";
 
 async function verifyClerkToken(token) {
   if (!token) return null;
@@ -18,6 +18,9 @@ async function verifyClerkToken(token) {
 }
 
 async function getAllClerkUsers() {
+  if (!process.env.CLERK_SECRET_KEY) {
+    throw new Error("CLERK_SECRET_KEY env var is not set");
+  }
   const users = [];
   let offset = 0;
   const limit = 100;
@@ -25,8 +28,13 @@ async function getAllClerkUsers() {
     const res = await fetch(`https://api.clerk.com/v1/users?limit=${limit}&offset=${offset}`, {
       headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` }
     });
-    if (!res.ok) break;
-    const batch = await res.json();
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Clerk /v1/users returned ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const json = await res.json();
+    // Clerk has historically returned a raw array; some API versions wrap in {data, total_count}
+    const batch = Array.isArray(json) ? json : (json.data || []);
     if (!batch.length) break;
     users.push(...batch);
     if (batch.length < limit) break;
@@ -44,8 +52,14 @@ export default async function handler(req, res) {
 
   const token = (req.headers["authorization"] || "").replace("Bearer ", "").trim();
   const session = await verifyClerkToken(token);
-  if (!session || session.sub !== process.env.ADMIN_USER_ID) {
-    return res.status(401).json({ error: "Unauthorized" });
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized: invalid or missing session token" });
+  }
+  if (!process.env.ADMIN_USER_ID) {
+    return res.status(500).json({ error: "Server misconfigured: ADMIN_USER_ID not set" });
+  }
+  if (session.sub !== process.env.ADMIN_USER_ID) {
+    return res.status(403).json({ error: `Forbidden: signed-in user is not the admin (got ${session.sub.slice(0, 12)}…)` });
   }
 
   try {
@@ -123,6 +137,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("Usage error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: err.message || "Internal server error" });
   }
 }
