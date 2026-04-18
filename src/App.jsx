@@ -1557,7 +1557,7 @@ const FORM2307_FIELDS = [
 ];
 const EMPTY_2307 = () => Object.fromEntries(FORM2307_FIELDS.map(f => [f.key, ""]));
 
-function Form2307Dashboard({ onBack }) {
+function Form2307Dashboard({ onBack, activeTab, onTabChange }) {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const [forms, setForms] = useState([]);
@@ -1700,7 +1700,7 @@ function Form2307Dashboard({ onBack }) {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div className="topbar-brand" style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
-          <div style={{ fontSize: 13, color: "#7eb8f7", fontWeight: 700, letterSpacing: "0.06em" }}>Form 2307</div>
+          <ModuleTabs activeTab={activeTab} onTabChange={onTabChange} />
         </div>
         <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {processingCount > 0 && (
@@ -2007,6 +2007,6 @@ function Form2307Dashboard({ onBack }) {
 export default function App() {
   const [module, setModule] = useState(null);
   if (!module) return <ModulePickerScreen onSelect={setModule} />;
-  if (module === "form2307") return <Form2307Dashboard onBack={() => setModule(null)} />;
+  if (module === "form2307") return <Form2307Dashboard onBack={() => setModule(null)} activeTab="form2307" onTabChange={setModule} />;
   return <Dashboard onBack={() => setModule(null)} activeTab="receipts" onTabChange={setModule} />;
 }
