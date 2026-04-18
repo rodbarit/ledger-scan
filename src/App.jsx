@@ -665,7 +665,7 @@ function BizCodeScreen({ onConfirm, activeTab, onTabChange }) {
 }
 
 // ── Main app ───────────────────────────────────────────────────────────────
-function Dashboard({ onBack }) {
+function Dashboard({ onBack, activeTab, onTabChange }) {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const [bizCode, setBizCode] = useState("");
@@ -759,7 +759,7 @@ function Dashboard({ onBack }) {
   const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
 
   // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} onBack={onBack} />;
+  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} activeTab={activeTab} onTabChange={onTabChange} />;
 
   const processFiles = async (files) => {
     if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
@@ -2002,5 +2002,5 @@ export default function App() {
   const [module, setModule] = useState(null);
   if (!module) return <ModulePickerScreen onSelect={setModule} />;
   if (module === "form2307") return <Form2307Dashboard onBack={() => setModule(null)} />;
-  return <Dashboard onBack={() => setModule(null)} />;
+  return <Dashboard onBack={() => setModule(null)} activeTab="receipts" onTabChange={setModule} />;
 }
