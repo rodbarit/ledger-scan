@@ -88,12 +88,13 @@ export default async function handler(req, res) {
             userId, email, createdAt,
             tier: tier || "free",
             scans: 0, scansThisMonth: 0,
+            lastUsedAt: null,
             tokens: { input: 0, output: 0, total: 0 },
             cost: { usd: "0.000000", php: "0.00" },
           };
         }
 
-        const [scans, inputTokens, outputTokens, costMicro, costPhpCentavos, monthlyScans, tier] = await Promise.all([
+        const [scans, inputTokens, outputTokens, costMicro, costPhpCentavos, monthlyScans, tier, lastUsed] = await Promise.all([
           kv.get(`user:${userId}:scans`),
           kv.get(`user:${userId}:tokens:input`),
           kv.get(`user:${userId}:tokens:output`),
@@ -101,6 +102,7 @@ export default async function handler(req, res) {
           kv.get(`user:${userId}:cost:php_centavos`),
           kv.get(`user:${userId}:scans:${month}`),
           kv.get(`user:${userId}:tier`),
+          kv.get(`user:${userId}:lastUsed`),
         ]);
 
         return {
@@ -108,6 +110,7 @@ export default async function handler(req, res) {
           tier: tier || "free",
           scans: scans || 0,
           scansThisMonth: monthlyScans || 0,
+          lastUsedAt: lastUsed ? new Date(Number(lastUsed)).toISOString() : null,
           tokens: {
             input: inputTokens || 0,
             output: outputTokens || 0,

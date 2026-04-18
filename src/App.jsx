@@ -133,6 +133,19 @@ function toCSV(bizCode, rows) {
 const ALL_KEYS = [...new Set([...FIELDS.map(f => f.key), ...SALES_FIELDS.map(f => f.key)])];
 const EMPTY_DATA = () => Object.fromEntries(ALL_KEYS.map(k => [k, ""]));
 
+function formatLastUsed(iso) {
+  if (!iso) return "—";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
 // ── API helpers ────────────────────────────────────────────────────────────
 async function extractReceiptData(base64, mediaType, token, isVatRegistered, entryType, userEmail) {
   const response = await fetch("/api/extract", {
@@ -1239,7 +1252,7 @@ function Dashboard({ onBack }) {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, whiteSpace: "nowrap" }}>
                     <thead>
                       <tr style={{ background: "#f8f7f5" }}>
-                        {["Email", "Signed Up", "Plan", "Scans / Limit", "This Month", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
+                        {["Email", "Signed Up", "Last Used", "Plan", "Scans / Limit", "This Month", "Input Tokens", "Output Tokens", "Cost (USD)", "Cost (PHP)"].map(h => (
                           <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#888", borderBottom: "1px solid #e5e2de" }}>{h}</th>
                         ))}
                       </tr>
@@ -1252,6 +1265,7 @@ function Dashboard({ onBack }) {
                             <div style={{ color: "#aaa", fontFamily: "monospace", fontSize: 10 }}>{u.userId.slice(0, 20)}…</div>
                           </td>
                           <td style={{ padding: "9px 14px", color: "#888", fontSize: 11 }}>{u.createdAt || "—"}</td>
+                          <td style={{ padding: "9px 14px", color: "#888", fontSize: 11 }} title={u.lastUsedAt || ""}>{formatLastUsed(u.lastUsedAt)}</td>
                           <td style={{ padding: "9px 14px" }}>
                             <button
                               onClick={() => cycleTier(u.userId, u.tier)}

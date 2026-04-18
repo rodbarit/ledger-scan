@@ -137,6 +137,7 @@ Rules:
         pipe.incrby(`user:${userId}:cost:php_centavos`, costPhpCentavos);
         pipe.incr(monthlyKey);
         pipe.expire(monthlyKey, 60 * 60 * 24 * 35);
+        pipe.set(`user:${userId}:lastUsed`, Date.now());
         if (userEmail) pipe.set(`user:${userId}:email`, userEmail);
         await pipe.exec();
       } catch (e) {
