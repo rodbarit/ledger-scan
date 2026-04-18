@@ -481,53 +481,8 @@ function UserMenu() {
   );
 }
 
-// ── Shared tab nav ──────────────────────────────────────────────────────────
-const APP_TABS = [
-  { id: "receipts", label: "Receipts" },
-  { id: "form2307", label: "Form 2307" },
-];
-
-function AppTabs({ activeTab, onTabChange, variant = "dark" }) {
-  const isDark = variant === "dark";
-  return (
-    <div className="app-tabs" style={{ display: "flex", gap: 2, alignItems: "center" }}>
-      {APP_TABS.map(t => {
-        const active = t.id === activeTab;
-        return (
-          <button
-            key={t.id}
-            onClick={() => !active && onTabChange(t.id)}
-            style={{
-              background: active
-                ? (isDark ? "rgba(126,184,247,0.15)" : "#1a1a2e")
-                : "transparent",
-              color: active
-                ? (isDark ? "#fff" : "#fff")
-                : (isDark ? "#8899bb" : "#888"),
-              border: "none",
-              borderBottom: isDark
-                ? `2px solid ${active ? "#7eb8f7" : "transparent"}`
-                : "none",
-              borderRadius: isDark ? 0 : 6,
-              padding: isDark ? "8px 14px" : "8px 16px",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              cursor: active ? "default" : "pointer",
-              fontFamily: "inherit",
-              transition: "all 0.15s",
-            }}
-          >
-            {t.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Business Code entry screen ─────────────────────────────────────────────
-function BizCodeScreen({ onConfirm, activeTab, onTabChange }) {
+function BizCodeScreen({ onConfirm, onBack }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [value, setValue] = useState("");
@@ -537,35 +492,17 @@ function BizCodeScreen({ onConfirm, activeTab, onTabChange }) {
   return (
     <div style={{
       minHeight: "100vh", background: "#f4f3f0",
-      fontFamily: "'Lato', sans-serif", boxSizing: "border-box"
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Lato', sans-serif", padding: "24px 16px", boxSizing: "border-box"
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
       <style>{`
         .biz-screen-width { width: 400px; }
-        .biz-topbar { padding: 0 40px; }
         @media (max-width: 480px) {
           .biz-screen-width { width: 100% !important; }
           .biz-card-padding { padding: 24px 20px !important; }
-          .biz-topbar { padding: 0 16px !important; }
         }
       `}</style>
-
-      {/* Top bar with tabs */}
-      <div className="biz-topbar" style={{
-        background: "#1a1a2e", color: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        height: 56, borderBottom: "3px solid #2a5298"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
-          <AppTabs activeTab={activeTab} onTabChange={onTabChange} />
-        </div>
-      </div>
-
-      <div style={{
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        padding: "48px 16px 24px", minHeight: "calc(100vh - 56px)", boxSizing: "border-box"
-      }}>
       <div className="biz-screen-width">
         <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#1a1a2e" }}>LedgerScan</div>
@@ -659,13 +596,12 @@ function BizCodeScreen({ onConfirm, activeTab, onTabChange }) {
           )}
         </div>
       </div>
-      </div>
     </div>
   );
 }
 
 // ── Main app ───────────────────────────────────────────────────────────────
-function Dashboard({ onBack, activeTab, onTabChange }) {
+function Dashboard({ onBack }) {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
   const [bizCode, setBizCode] = useState("");
@@ -759,7 +695,7 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
   const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
 
   // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} activeTab={activeTab} onTabChange={onTabChange} />;
+  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} onBack={onBack} />;
 
   const processFiles = async (files) => {
     if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
@@ -2002,5 +1938,5 @@ export default function App() {
   const [module, setModule] = useState(null);
   if (!module) return <ModulePickerScreen onSelect={setModule} />;
   if (module === "form2307") return <Form2307Dashboard onBack={() => setModule(null)} />;
-  return <Dashboard onBack={() => setModule(null)} activeTab="receipts" onTabChange={setModule} />;
+  return <Dashboard onBack={() => setModule(null)} />;
 }
