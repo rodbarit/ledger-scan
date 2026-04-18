@@ -671,9 +671,10 @@ function BizCodeScreen({ onConfirm, onBack, activeTab, onTabChange }) {
 function Dashboard({ onBack, activeTab, onTabChange }) {
   const { isSignedIn, user } = useUser();
   const { getToken } = useAuth();
-  const [bizCode, setBizCode] = useState("");
-  const [isVatRegistered, setIsVatRegistered] = useState(null);
-  const [entryType, setEntryType] = useState(null);
+  const [bizCode, setBizCode] = useState(() => localStorage.getItem("ledgerscan:bizCode") || "");
+  const [isVatRegistered, setIsVatRegistered] = useState(() => localStorage.getItem("ledgerscan:isVatRegistered") !== "false");
+  const [entryType, setEntryType] = useState(() => localStorage.getItem("ledgerscan:entryType") || "expenses");
+  const [editingBizCode, setEditingBizCode] = useState(false);
   const [receipts, setReceipts] = useState([]);
   const [dragging, setDragging] = useState(false);
   const [globalError, setGlobalError] = useState(null);
@@ -737,6 +738,11 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
 
   useEffect(() => { fetchUserStats(); }, [fetchUserStats]);
 
+  // Persist session context to localStorage
+  useEffect(() => { localStorage.setItem("ledgerscan:bizCode", bizCode); }, [bizCode]);
+  useEffect(() => { localStorage.setItem("ledgerscan:isVatRegistered", String(isVatRegistered)); }, [isVatRegistered]);
+  useEffect(() => { localStorage.setItem("ledgerscan:entryType", entryType); }, [entryType]);
+
   const loadAdminData = async () => {
     setAdminLoading(true);
     setAdminError(null);
@@ -761,8 +767,6 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
 
   const freeScansLeft = Math.max(0, FREE_SCAN_LIMIT - freeScans);
 
-  // Show business code entry screen first
-  if (!bizCode) return <BizCodeScreen onConfirm={(biz, vat, type) => { setBizCode(biz); setIsVatRegistered(vat); setEntryType(type); }} onBack={onBack} activeTab={activeTab} onTabChange={onTabChange} />;
 
   const processFiles = async (files) => {
     if (!isSignedIn && freeScans >= FREE_SCAN_LIMIT) {
@@ -823,8 +827,18 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
   const doneCount = done.length;
   const processingCount = receipts.filter(r => r.status === "processing").length;
 
+  const requireBizCode = () => {
+    if (!bizCode.trim()) {
+      setEditingBizCode(true);
+      setGlobalError("Please set a Business Code before exporting.");
+      return false;
+    }
+    return true;
+  };
+
   const downloadCSV = () => {
     if (!doneCount) return;
+    if (!requireBizCode()) return;
     const csv = entryType === "sales" ? toSalesCSV(bizCode, done, isVatRegistered) : toCSV(bizCode, done);
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
@@ -835,6 +849,7 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
 
   const downloadPDF = async () => {
     if (!doneCount) return;
+    if (!requireBizCode()) return;
     setGeneratingPDF(true);
     try { await generatePDF(bizCode, done, buildFilename(bizCode, "pdf"), entryType); }
     catch (e) { setGlobalError("PDF generation failed. Please try again."); }
@@ -843,6 +858,7 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
 
   const sendEmail = async () => {
     if (!doneCount) return;
+    if (!requireBizCode()) return;
     setSendingEmail(true);
     try {
       // Generate PDF as base64
@@ -904,14 +920,54 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
           <ModuleTabs activeTab={activeTab} onTabChange={onTabChange} />
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
-          <div style={{ fontSize: 13, color: "#7eb8f7", fontWeight: 700, letterSpacing: "0.06em" }}>{bizCode}</div>
+          {editingBizCode ? (
+            <input
+              autoFocus
+              value={bizCode}
+              onChange={e => setBizCode(e.target.value.toUpperCase())}
+              onBlur={() => setEditingBizCode(false)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") setEditingBizCode(false); }}
+              placeholder="Biz Code"
+              style={{
+                background: "rgba(255,255,255,0.08)", border: "1px solid rgba(126,184,247,0.4)",
+                borderRadius: 4, padding: "3px 8px", fontSize: 13, fontWeight: 700,
+                letterSpacing: "0.06em", color: "#7eb8f7", outline: "none", width: 120,
+                fontFamily: "inherit"
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => setEditingBizCode(true)}
+              title="Click to edit business code"
+              style={{
+                background: bizCode ? "transparent" : "rgba(239,68,68,0.15)",
+                border: bizCode ? "1px dashed transparent" : "1px dashed #f87171",
+                borderRadius: 4, padding: "3px 8px", fontSize: 13,
+                color: bizCode ? "#7eb8f7" : "#f87171",
+                fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer",
+                fontFamily: "inherit"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(126,184,247,0.12)"}
+              onMouseLeave={e => e.currentTarget.style.background = bizCode ? "transparent" : "rgba(239,68,68,0.15)"}
+            >
+              {bizCode || "Set Biz Code"}
+            </button>
+          )}
           <div style={{ display: "flex", gap: 6 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: entryType === "sales" ? "#166534" : "#1e3a5f", color: entryType === "sales" ? "#86efac" : "#7eb8f7", border: `1px solid ${entryType === "sales" ? "#16a34a44" : "#2a529844"}` }}>
+            <button
+              onClick={() => setEntryType(t => t === "sales" ? "expenses" : "sales")}
+              title="Click to toggle between Expenses and Sales"
+              style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: entryType === "sales" ? "#166534" : "#1e3a5f", color: entryType === "sales" ? "#86efac" : "#7eb8f7", border: `1px solid ${entryType === "sales" ? "#16a34a44" : "#2a529844"}`, cursor: "pointer", fontFamily: "inherit" }}
+            >
               {entryType === "sales" ? "Sales" : "Expenses"}
-            </span>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: isVatRegistered ? "#3b1f00" : "#2d1f00", color: isVatRegistered ? "#fbbf24" : "#f87171", border: `1px solid ${isVatRegistered ? "#d9770644" : "#ef444444"}` }}>
+            </button>
+            <button
+              onClick={() => setIsVatRegistered(v => !v)}
+              title="Click to toggle VAT registration"
+              style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: isVatRegistered ? "#3b1f00" : "#2d1f00", color: isVatRegistered ? "#fbbf24" : "#f87171", border: `1px solid ${isVatRegistered ? "#d9770644" : "#ef444444"}`, cursor: "pointer", fontFamily: "inherit" }}
+            >
               {isVatRegistered ? "VAT" : "Non-VAT"}
-            </span>
+            </button>
           </div>
         </div>
         <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
