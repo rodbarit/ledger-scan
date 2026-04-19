@@ -956,16 +956,16 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         height: 56, borderBottom: "3px solid #2a5298"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div
             className="topbar-brand"
             onClick={() => { setShowAdmin(false); onTabChange?.("receipts"); }}
             title="Home"
             style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, cursor: "pointer", userSelect: "none" }}
           >LedgerScan</div>
-          <div style={{ width: 1, height: 20, background: "#2a5298" }} />
+          <div className="topbar-divider" style={{ width: 1, height: 20, background: "#2a5298" }} />
           <ModuleTabs activeTab={activeTab} onTabChange={onTabChange} />
-          <div style={{ width: 1, height: 20, background: "#2a5298" }} />
+          <div className="topbar-divider" style={{ width: 1, height: 20, background: "#2a5298" }} />
           {editingBizCode ? (
             <input
               autoFocus
@@ -999,7 +999,7 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
               {bizCode || "Set Biz Code"}
             </button>
           )}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <SegmentedToggle
               options={[
                 { value: "expenses", label: "Expenses" },
@@ -1384,6 +1384,8 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
           .export-bar button { width: 100% !important; padding: 13px !important; font-size: 14px !important; }
           .topbar-actions { flex-wrap: wrap; gap: 8px !important; justify-content: flex-end; }
           .topbar-brand { font-size: 16px !important; }
+          .topbar-left { gap: 8px !important; }
+          .topbar-divider { display: none !important; }
           .subbar-right { display: none !important; }
         }
       `}</style>
@@ -1819,14 +1821,14 @@ function Form2307Dashboard({ onBack, activeTab, onTabChange }) {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         height: 56, borderBottom: "3px solid #2a5298"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div
             className="topbar-brand"
             onClick={() => onTabChange?.("receipts")}
             title="Home"
             style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, cursor: "pointer", userSelect: "none" }}
           >LedgerScan</div>
-          <div style={{ width: 1, height: 20, background: "#2a5298" }} />
+          <div className="topbar-divider" style={{ width: 1, height: 20, background: "#2a5298" }} />
           <ModuleTabs activeTab={activeTab} onTabChange={onTabChange} />
         </div>
         <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -2078,6 +2080,8 @@ function Form2307Dashboard({ onBack, activeTab, onTabChange }) {
           .upload-zone { padding: 24px 16px !important; margin-bottom: 16px !important; }
           .topbar-actions { flex-wrap: wrap; gap: 8px !important; justify-content: flex-end; }
           .topbar-brand { font-size: 16px !important; }
+          .topbar-left { gap: 8px !important; }
+          .topbar-divider { display: none !important; }
           .subbar-right { display: none !important; }
         }
       `}</style>
