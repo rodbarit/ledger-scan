@@ -555,8 +555,8 @@ function SegmentedToggle({ options, value, onChange }) {
               padding: "3px 10px",
               border: "none",
               borderLeft: i === 0 ? "none" : "1px solid #2a5298",
-              background: active ? opt.activeBg : "transparent",
-              color: active ? opt.activeColor : "#5a6b8a",
+              background: active ? "rgba(126,184,247,0.18)" : "transparent",
+              color: active ? "#7eb8f7" : "#5a6b8a",
               cursor: active ? "default" : "pointer",
               fontFamily: "inherit",
               transition: "background 0.15s, color 0.15s",
@@ -957,7 +957,12 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
         height: 56, borderBottom: "3px solid #2a5298"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div className="topbar-brand" style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
+          <div
+            className="topbar-brand"
+            onClick={() => { setShowAdmin(false); onTabChange?.("receipts"); }}
+            title="Home"
+            style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, cursor: "pointer", userSelect: "none" }}
+          >LedgerScan</div>
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
           <ModuleTabs activeTab={activeTab} onTabChange={onTabChange} />
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
@@ -997,8 +1002,8 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
           <div style={{ display: "flex", gap: 8 }}>
             <SegmentedToggle
               options={[
-                { value: "expenses", label: "Expenses", activeBg: "#1e3a5f", activeColor: "#7eb8f7", activeBorder: "#2a529844" },
-                { value: "sales",    label: "Sales",    activeBg: "#166534", activeColor: "#86efac", activeBorder: "#16a34a44" },
+                { value: "expenses", label: "Expenses" },
+                { value: "sales",    label: "Sales" },
               ]}
               value={entryType}
               onChange={(next) => {
@@ -1014,8 +1019,8 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
             />
             <SegmentedToggle
               options={[
-                { value: true,  label: "VAT",     activeBg: "#3b1f00", activeColor: "#fbbf24", activeBorder: "#d9770644" },
-                { value: false, label: "Non-VAT", activeBg: "#2d1f00", activeColor: "#f87171", activeBorder: "#ef444444" },
+                { value: true,  label: "VAT" },
+                { value: false, label: "Non-VAT" },
               ]}
               value={isVatRegistered}
               onChange={(next) => {
@@ -1815,7 +1820,12 @@ function Form2307Dashboard({ onBack, activeTab, onTabChange }) {
         height: 56, borderBottom: "3px solid #2a5298"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div className="topbar-brand" style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700 }}>LedgerScan</div>
+          <div
+            className="topbar-brand"
+            onClick={() => onTabChange?.("receipts")}
+            title="Home"
+            style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, cursor: "pointer", userSelect: "none" }}
+          >LedgerScan</div>
           <div style={{ width: 1, height: 20, background: "#2a5298" }} />
           <ModuleTabs activeTab={activeTab} onTabChange={onTabChange} />
         </div>
