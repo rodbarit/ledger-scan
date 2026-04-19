@@ -531,6 +531,47 @@ function ModuleTabs({ activeTab, onTabChange }) {
   );
 }
 
+// ── Segmented toggle (both options visible, active highlighted) ───────────
+function SegmentedToggle({ options, value, onChange }) {
+  return (
+    <div style={{
+      display: "inline-flex",
+      border: "1px solid #2a5298",
+      borderRadius: 4,
+      overflow: "hidden",
+      fontFamily: "inherit",
+    }}>
+      {options.map((opt, i) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={String(opt.value)}
+            onClick={() => onChange(opt.value)}
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              padding: "3px 10px",
+              border: "none",
+              borderLeft: i === 0 ? "none" : "1px solid #2a5298",
+              background: active ? opt.activeBg : "transparent",
+              color: active ? opt.activeColor : "#5a6b8a",
+              cursor: active ? "default" : "pointer",
+              fontFamily: "inherit",
+              transition: "background 0.15s, color 0.15s",
+            }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.color = "#8899bb"; }}
+            onMouseLeave={e => { if (!active) e.currentTarget.style.color = "#5a6b8a"; }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Business Code entry screen ─────────────────────────────────────────────
 function BizCodeScreen({ onConfirm, onBack, activeTab, onTabChange }) {
   const { user } = useUser();
@@ -953,21 +994,41 @@ function Dashboard({ onBack, activeTab, onTabChange }) {
               {bizCode || "Set Biz Code"}
             </button>
           )}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              onClick={() => setEntryType(t => t === "sales" ? "expenses" : "sales")}
-              title="Click to toggle between Expenses and Sales"
-              style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: entryType === "sales" ? "#166534" : "#1e3a5f", color: entryType === "sales" ? "#86efac" : "#7eb8f7", border: `1px solid ${entryType === "sales" ? "#16a34a44" : "#2a529844"}`, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              {entryType === "sales" ? "Sales" : "Expenses"}
-            </button>
-            <button
-              onClick={() => setIsVatRegistered(v => !v)}
-              title="Click to toggle VAT registration"
-              style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 4, background: isVatRegistered ? "#3b1f00" : "#2d1f00", color: isVatRegistered ? "#fbbf24" : "#f87171", border: `1px solid ${isVatRegistered ? "#d9770644" : "#ef444444"}`, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              {isVatRegistered ? "VAT" : "Non-VAT"}
-            </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <SegmentedToggle
+              options={[
+                { value: "expenses", label: "Expenses", activeBg: "#1e3a5f", activeColor: "#7eb8f7", activeBorder: "#2a529844" },
+                { value: "sales",    label: "Sales",    activeBg: "#166534", activeColor: "#86efac", activeBorder: "#16a34a44" },
+              ]}
+              value={entryType}
+              onChange={(next) => {
+                if (next === entryType) return;
+                if (receipts.length > 0) {
+                  const ok = window.confirm(`Switching entry type will clear ${receipts.length} existing receipt${receipts.length === 1 ? "" : "s"} (they were extracted under the current mode). Continue?`);
+                  if (!ok) return;
+                  setReceipts([]);
+                  setExpandedId(null);
+                }
+                setEntryType(next);
+              }}
+            />
+            <SegmentedToggle
+              options={[
+                { value: true,  label: "VAT",     activeBg: "#3b1f00", activeColor: "#fbbf24", activeBorder: "#d9770644" },
+                { value: false, label: "Non-VAT", activeBg: "#2d1f00", activeColor: "#f87171", activeBorder: "#ef444444" },
+              ]}
+              value={isVatRegistered}
+              onChange={(next) => {
+                if (next === isVatRegistered) return;
+                if (receipts.length > 0) {
+                  const ok = window.confirm(`Switching VAT mode will clear ${receipts.length} existing receipt${receipts.length === 1 ? "" : "s"} (they were extracted under the current mode). Continue?`);
+                  if (!ok) return;
+                  setReceipts([]);
+                  setExpandedId(null);
+                }
+                setIsVatRegistered(next);
+              }}
+            />
           </div>
         </div>
         <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
